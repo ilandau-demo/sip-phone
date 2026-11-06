@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "SIP Phone",
+  "version": "2.4.3",
+  "description": "Side-panel softphone: click-to-call, incoming-call alerts, and your team's live presence \u2014 with the desktop app, or presence on its own.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2eoTaM6Rkowya/YYluGIEy75OMIcBmuLbumTmkIN4ofIhvwjuj5iymae+G/83nLV5CflWsRDYnz3EYCvqct1REpbBsWGhuWavuRj8YmLoyWC9sDKjOgye9DKWtEdmqCC7ctrwvAHcHaa6BsdhXvz8ZzBi1bm+36w4ucN21QCdfIExqZebW8i3GoWM8gPPxO6DU4XBAp0BvdCVXFSsylrVw5lC58uuWYZYVa1O5xia7zQQlFezOetKvEgNOOcvrEXyqIqADAsf74nh1F/JO2chQ0Hg6UXqxxuPr6DhaVfEmaHoiP6XpXkP3Ry4g6nxxH5HGOwxblnQWUoN3Nf8VZpMwIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "SIP Phone",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "permissions": [
+    "sidePanel",
+    "nativeMessaging",
+    "contextMenus",
+    "notifications",
+    "storage",
+    "offscreen",
+    "tts"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8088/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

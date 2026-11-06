@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SIP Phone</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <main id="msg" class="msg" hidden>
+    <img src="icons/icon48.png" alt="" width="40" height="40">
+    <h1 id="msg-title">Starting SIP Phone…</h1>
+    <p id="msg-body"></p>
+    <button id="msg-btn" hidden>Try again</button>
+    <button id="msg-team" class="ghost" hidden>Just show my team (no install)</button>
+  </main>
+  <section id="team" class="team" hidden>
+    <header class="team-head"><span id="team-title">Team view</span><span><button id="team-gear" title="Team view settings" aria-label="Team view settings">⚙</button></span></header>
+    <div class="team-tools">
+      <div class="tsearch"><input id="team-q" type="search" placeholder="Search name, extension, department…" autocomplete="off" spellcheck="false" aria-label="Search the directory"><button id="team-qx" class="qx" aria-label="Clear search" hidden>×</button></div>
+      <div id="team-chips" class="chips" role="group" aria-label="Presence filters"></div>
+    </div>
+    <div id="team-list" class="team-list"></div>
+    <div id="team-foot" class="team-foot"></div>
+  </section>
+  <dialog id="pdlg" class="person-dlg" aria-labelledby="pd-name">
+    <form method="dialog">
+      <div class="pd-head"><span class="dot" id="pd-dot"></span><div><div class="pd-name" id="pd-name"></div><div class="pd-state" id="pd-state"></div></div></div>
+      <dl class="pd-fields" id="pd-fields"></dl>
+      <div class="pd-watch">
+        <div class="pd-watch-title">Notify me when this person…</div>
+        <div id="pd-watch-opts" class="pd-watch-opts"></div>
+        <label class="check"><input type="checkbox" id="pd-watch-sound" checked><span>Play a sound</span></label>
+      </div>
+      <div class="row"><span></span><button value="close">Close</button></div>
+    </form>
+  </dialog>
+  <section id="setup" class="setup" hidden>
+    <h1>Team view without the app</h1>
+    <p>See who's free, ringing or on a call using only your own phone-system login. Nothing is installed; no calls can be made from here.</p>
+    <label>XSI server<input id="su-host" placeholder="https://xsi.nextiva.com" spellcheck="false"></label>
+    <label>User login<input id="su-user" placeholder="Your user ID, e.g. jdoe1234567@example.com" spellcheck="false" autocomplete="username"></label>
+    <label>Password<input id="su-pass" type="password" autocomplete="current-password"></label>
+    <div class="su-group"><span>Also list as speed dials</span><div id="su-svc" class="su-svc"></div></div>
+    <label>Hide from the list<input id="su-hide" placeholder="Your own user ID, extension or number" spellcheck="false"></label>
+    <p id="su-msg" class="su-msg" role="status"></p>
+    <div class="su-row">
+      <button id="su-off" class="ghost" hidden>Turn off</button>
+      <span><button id="su-check" class="ghost">Check</button> <button id="su-save">Save</button></span>
+    </div>
+    <p class="su-note">The password is kept in this browser profile only. For calls, transfers and pick-ups, install the desktop app.</p>
+  </section>
+  <iframe id="ui" title="SIP Phone" allow="autoplay" hidden></iframe>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

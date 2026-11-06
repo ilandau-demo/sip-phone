@@ -1,0 +1,4 @@
+sounddevice>=0.4
+numpy>=1.20
+# text-to-speech (optional)
+piper-tts>=1.2

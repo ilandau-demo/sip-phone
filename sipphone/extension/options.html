@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SIP Phone options</title>
+<style>
+  body { font: 14px/1.5 "Segoe UI", system-ui, sans-serif; color: #15262B; max-width: 520px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #CFD7D2; }
+  label small { display: block; color: #51656B; }
+  #saved { color: #1E7A4C; font-size: 13px; min-height: 20px; margin-top: 10px; }
+  .acct { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; background: #E6EAE4; border-radius: 10px; margin-bottom: 8px; }
+  .acct small { display: block; color: #51656B; }
+  .acct button { font: inherit; font-weight: 600; background: #15262B; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; white-space: nowrap; }
+  #conn { margin-top: 20px; font-size: 13px; color: #51656B; }
+</style>
+</head>
+<body>
+  <h1>SIP Phone</h1>
+  <div class="acct">
+    <div><b>Account &amp; phone settings</b><small>Your SIP login, Team view, voice and audio are set in the phone itself.</small></div>
+    <button id="open-settings">Open settings</button>
+  </div>
+  <label><input type="checkbox" id="notifyIncoming">
+    <span>Notify me of incoming calls<small>Shows Answer / Decline even when the side panel is closed.</small></span></label>
+  <label><input type="checkbox" id="voiceNotify">
+    <span>Speak availability notifications<small>Uses the browser's built-in voice: "Alice Adams is now available". Set rules from a person's details in the Team view.</small></span></label>
+  <label><input type="checkbox" id="notifyTeamRinging">
+    <span>Notify me when a teammate is ringing<small>Needs the Team view set up in the desktop app.</small></span></label>
+  <div id="saved"></div>
+  <div id="conn"></div>
+  <script src="options.js"></script>
+</body>
+</html>

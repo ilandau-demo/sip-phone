@@ -1,0 +1,14 @@
+# the extension's private signing key: never ship, never commit
+.extkey/
+# build output
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+.nh-tmp/
+# local settings, logs and caches
+config.ini
+voice.json
+*.log
+models/

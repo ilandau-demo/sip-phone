@@ -1,0 +1,285 @@
+"""Windows "app" mode: no console window, browser UI, Start-menu shortcut.
+
+* ``sipphone-app``  (gui_scripts entry → sipphone-app.exe, runs under pythonw)
+  Starts the phone with the settings in config.ini, opens the UI, logs to
+  app.log in the config folder, and exits when "Quit" is pressed in the UI.
+  If an instance is already running it just brings the UI up in the browser.
+
+* ``sipphone --install-shortcut``
+  Creates "SIP Phone" in the Start menu (Programs folder) pointing at
+  sipphone-app.exe with the bundled icon, so it can be pinned to Start/taskbar.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import socket
+import subprocess
+import sys
+import sysconfig
+import threading
+import time
+import webbrowser
+
+UI_PORT = 8088
+
+
+def _scripts_dir() -> str:
+    """Folder that holds sipphone-app.exe for the running interpreter."""
+    candidates = []
+    for scheme in (f"{os.name}_user", "nt_user", "posix_user", None):
+        try:
+            candidates.append(sysconfig.get_path("scripts", scheme) if scheme else sysconfig.get_path("scripts"))
+        except Exception:
+            pass
+    candidates.append(os.path.join(os.path.dirname(sys.executable), "Scripts"))
+    exe = "sipphone-app.exe" if sys.platform == "win32" else "sipphone-app"
+    for c in candidates:
+        if c and os.path.isfile(os.path.join(c, exe)):
+            return c
+    return candidates[0] or ""
+
+
+def app_exe_path() -> str:
+    exe = "sipphone-app.exe" if sys.platform == "win32" else "sipphone-app"
+    return os.path.join(_scripts_dir(), exe)
+
+
+def icon_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "sipphone.ico")
+
+
+def install_shortcut() -> str:
+    """Create a Start-menu shortcut (Windows). Returns the .lnk path."""
+    if sys.platform != "win32":
+        raise RuntimeError("Start-menu shortcuts are a Windows feature")
+    target = app_exe_path()
+    if not os.path.isfile(target):
+        raise RuntimeError(f"sipphone-app.exe not found (looked in {_scripts_dir()}); reinstall the package")
+    programs = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs")
+    # The Store build of Python virtualises APPDATA; resolve the real folder via the shell.
+    real = subprocess.run(["powershell", "-NoProfile", "-Command",
+                           "[Environment]::GetFolderPath('Programs')"], capture_output=True, text=True)
+    if real.returncode == 0 and real.stdout.strip():
+        programs = real.stdout.strip()
+    lnk = os.path.join(programs, "SIP Phone.lnk")
+    ps = f"""
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}')
+$s.TargetPath = '{target}'
+$s.WorkingDirectory = '{os.path.dirname(target)}'
+$s.IconLocation = '{icon_path()},0'
+$s.Description = 'SIP softphone with text-to-speech'
+$s.Save()
+"""
+    r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"could not create shortcut: {r.stderr.strip()}")
+    return lnk
+
+
+def _startup_entry() -> str:
+    """Where a 'start when I sign in' entry lives for this user."""
+    if sys.platform == "win32":
+        real = subprocess.run(["powershell", "-NoProfile", "-Command",
+                               "[Environment]::GetFolderPath('Startup')"], capture_output=True, text=True)
+        folder = real.stdout.strip() if real.returncode == 0 and real.stdout.strip() else \
+            os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+        return os.path.join(folder, "SIP Phone.lnk")
+    return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                        "autostart", "sipphone.desktop")
+
+
+def starts_with_windows() -> bool:
+    return os.path.isfile(_startup_entry())
+
+
+def set_start_with_windows(on: bool) -> str:
+    """Add/remove the sign-in autostart entry (the phone starts without a browser
+    tab, so the extension and the Start-menu shortcut find it already running)."""
+    entry = _startup_entry()
+    if not on:
+        try:
+            os.remove(entry)
+        except FileNotFoundError:
+            pass
+        return entry
+    target = app_exe_path()
+    if not os.path.isfile(target):
+        raise RuntimeError(f"sipphone-app not found at {target}; reinstall the package")
+    os.makedirs(os.path.dirname(entry), exist_ok=True)
+    if sys.platform == "win32":
+        ps = f"""
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{entry}')
+$s.TargetPath = '{target}'
+$s.Arguments = '--no-browser'
+$s.WorkingDirectory = '{os.path.dirname(target)}'
+$s.IconLocation = '{icon_path()},0'
+$s.Description = 'SIP Phone (starts in the background at sign-in)'
+$s.Save()
+"""
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"could not create the startup shortcut: {r.stderr.strip()}")
+    else:
+        with open(entry, "w", encoding="utf-8") as f:
+            f.write("[Desktop Entry]\nType=Application\nName=SIP Phone\n"
+                    f"Exec={target} --no-browser\nX-GNOME-Autostart-enabled=true\n")
+    return entry
+
+
+def _port_in_use(port: int) -> bool:
+    with socket.socket() as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _running_version() -> str:
+    """Version string reported by an instance already listening on UI_PORT."""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{UI_PORT}/api/version", timeout=2) as r:
+            return json.load(r).get("version", "")
+    except Exception:
+        return ""
+
+
+def _quit_running() -> None:
+    """Ask the instance on UI_PORT to shut down cleanly."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{UI_PORT}/api/quit", data=b"{}",
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=2).read()
+    except Exception:
+        pass
+
+
+def pythonw() -> str:
+    """This interpreter, windowless where available."""
+    exe = sys.executable
+    if sys.platform == "win32" and os.path.basename(exe).lower() == "python.exe":
+        cand = os.path.join(os.path.dirname(exe), "pythonw.exe")
+        if os.path.isfile(cand):
+            return cand
+    return exe
+
+
+def relaunch_command(args: list) -> list:
+    """How a Python process should start the app. The pip-made sipphone-app.exe
+    launcher can't resolve Store Python's pythonw alias from inside a Store
+    Python process (its AppData\Local is redirected), so always go through the
+    interpreter itself; the exe launcher is only for Explorer / the Start menu."""
+    return [pythonw(), "-m", "sipphone.app"] + list(args)
+
+
+def spawn_detached(args: list) -> None:
+    """Start another copy of the app that outlives this process."""
+    cmd = relaunch_command(args)
+    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if sys.platform == "win32":
+        DETACHED, NEW_GROUP, BREAKAWAY = 0x00000008, 0x00000200, 0x01000000
+        try:
+            subprocess.Popen(cmd, creationflags=DETACHED | NEW_GROUP | BREAKAWAY, **kw)
+        except OSError:
+            subprocess.Popen(cmd, creationflags=DETACHED | NEW_GROUP, **kw)
+    else:
+        subprocess.Popen(cmd, start_new_session=True, **kw)
+    logging.info("spawned %s", cmd)
+
+
+def main() -> int:
+    from .cli import config_dir, init_config, main as cli_main
+
+    # App mode is always tied to the per-user config (%APPDATA%\sipphone on
+    # Windows). Unlike the `sipphone` CLI, it deliberately ignores any
+    # config.ini in the current working directory, so a pinned shortcut opens
+    # the same account no matter where Windows launches it from.
+    cfg_path = os.path.join(config_dir(), "config.ini")
+    if not os.path.isfile(cfg_path):
+        cfg_path = init_config()
+    log_dir = os.path.dirname(cfg_path) or config_dir()
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "app.log")
+
+    # No console under pythonw: send everything to a log file.
+    if sys.stdout is None or sys.stderr is None:
+        sys.stdout = sys.stderr = open(log_file, "a", encoding="utf-8", buffering=1)
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr,
+                        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s", datefmt="%H:%M:%S",
+                        force=True)
+    logging.info("SIP Phone app starting; config: %s", cfg_path)
+
+    from . import __version__
+    from . import updater
+    if "--after-update" in sys.argv[1:]:
+        updater.clear_lock()
+    elif updater.updating() is not None:
+        # Started by hand while the update helper is still working: wait for it.
+        logging.info("an update is in progress; waiting for it to finish")
+        for _ in range(240):
+            if updater.updating() is None:
+                break
+            time.sleep(0.5)
+    # keep the browser extension folder in step with this version (it reloads itself)
+    try:
+        from .extension_sync import sync
+        sync()
+    except Exception as e:
+        logging.warning("extension folder not updated: %s", e)
+    # and make sure the browser can reach the bridge (no installer needed)
+    try:
+        from .native_host import register_bridge
+        r = register_bridge()
+        if not r["ok"]:
+            logging.warning("browser bridge not registered: %s", r["note"])
+        elif r["changed"]:
+            logging.info("browser bridge registered: %s -> %s", ", ".join(r["where"]), r["path"])
+    except Exception as e:
+        logging.warning("browser bridge registration failed: %s", e)
+    no_browser = "--no-browser" in sys.argv[1:]
+    if "--wait-for-port" in sys.argv[1:] or "--after-update" in sys.argv[1:]:
+        # Restart from Settings: the old copy is shutting down; wait for it.
+        for _ in range(120):
+            if not _port_in_use(UI_PORT):
+                break
+            time.sleep(0.25)
+        time.sleep(0.5)                 # let it release the SIP port too
+    if _port_in_use(UI_PORT):  # something is already running on our port
+        running = _running_version()
+        if running == __version__:
+            logging.info("same version (%s) already running; opening it", __version__)
+            if not no_browser:
+                webbrowser.open(f"http://127.0.0.1:{UI_PORT}/")
+            return 0
+        # An older (or unknown) instance is still running the old code — that's
+        # why updates don't show. Ask it to quit, wait for the port to free,
+        # then start the current version in its place.
+        logging.info("replacing running version %s with %s", running or "unknown", __version__)
+        _quit_running()
+        for _ in range(20):
+            if not _port_in_use(UI_PORT):
+                break
+            time.sleep(0.25)
+        if _port_in_use(UI_PORT):
+            logging.warning("old instance didn't exit; opening whatever is there")
+            webbrowser.open(f"http://127.0.0.1:{UI_PORT}/")
+            return 0
+
+    try:
+        return cli_main(["--config", cfg_path, "--ui", "--ui-port", str(UI_PORT), "--app"]
+                        + (["--no-browser"] if no_browser else []))
+    except SystemExit as e:
+        # config problems etc.: surface them in the browser-less world via a message box
+        msg = str(e)
+        if msg and msg != "0" and sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(0, msg, "SIP Phone", 0x10)
+            except Exception:
+                pass
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

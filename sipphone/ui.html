@@ -1,0 +1,1992 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIP Phone</title>
+<style>
+  :root {
+    --bench: #E6EAE4;
+    --panel: #FFFFFF;
+    --ink: #15262B;
+    --ink-2: #51656B;
+    --ink-3: #7B8C92;
+    --rule: #CFD7D2;
+    --line: #1E7A4C;
+    --line-soft: #DDEFE4;
+    --ring: #D08A1C;
+    --ring-soft: #F6E8CB;
+    --hang: #B8352A;
+    --hang-soft: #F5DDDA;
+    --said: #EEF2EC;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  /* Chrome extension side panel (?embed=1): narrow, no outer chrome */
+  body.embed .app { padding: 0 10px 10px; gap: 10px; }
+  body.embed .top { padding-top: 6px; gap: 8px; flex-wrap: wrap; }
+  body.embed .top h1 { display: none; }
+  body.embed .top .reg { margin-right: auto; min-width: 0; }
+  body.embed .top .reg #regtext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.embed .top .ghost { padding: 4px 6px; font-size: 13px; }
+  body.embed .top { flex-wrap: nowrap; }
+  body.embed .dialer, body.embed .talk { border-radius: 10px; }
+  body.embed .dialer { padding: 14px; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bench);
+    color: var(--ink);
+    font: 15px/1.45 "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 16px 16px;
+    gap: 16px;
+  }
+  /* ---- top line: registration ---- */
+  .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding-top: 12px; }
+  .top h1 { font-size: 17px; font-weight: 600; margin: 0 auto 0 0; letter-spacing: -0.01em; }
+  .reg { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+  .reg .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+  .reg.on .dot { background: var(--line); box-shadow: 0 0 0 3px var(--line-soft); }
+  .reg.off .dot { background: var(--hang); box-shadow: 0 0 0 3px var(--hang-soft); }
+  .reg b { font-weight: 600; color: var(--ink); }
+  .top .ghost { color: var(--ink-2); padding: 6px 10px; border-radius: 6px; }
+  .top .ghost:hover { background: rgba(0,0,0,.05); }
+
+  /* ---- dialer ---- */
+  .dialer { background: var(--panel); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
+  .number {
+    width: 100%; border: 0; border-bottom: 2px solid var(--rule); background: none;
+    font-size: 30px; font-weight: 500; letter-spacing: 0.04em; padding: 6px 2px; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .number::placeholder { color: var(--ink-3); font-weight: 400; letter-spacing: 0; font-size: 22px; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .keys button {
+    height: 56px; border-radius: 10px; background: var(--bench); font-size: 22px; font-weight: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+  }
+  .keys button small { font-size: 10px; color: var(--ink-3); margin-top: 3px; letter-spacing: 0.12em; }
+  .keys button:hover { background: #DCE2DB; }
+  .keys button:active { transform: translateY(1px); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .actions button { height: 50px; border-radius: 10px; font-weight: 600; font-size: 15px; color: #fff; }
+  .call { background: var(--line); }
+  .answer { background: var(--ring); }
+  .hang { background: var(--hang); }
+  .actions button[disabled] { opacity: .35; cursor: default; }
+  .actions .wide { grid-column: 1 / -1; }
+  .callstate { min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+  .callstate .who { font-weight: 600; }
+  .callstate .what { color: var(--ink-2); font-size: 14px; }
+  .callstate.ringing .what { color: var(--ring); }
+  .callstate.live .what { color: var(--line); }
+  .hint { color: var(--ink-3); font-size: 13px; margin: 0; }
+  .incall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .incall button { height: 42px; border-radius: 10px; background: var(--bench); font-weight: 500; font-size: 14px; }
+  .incall button:hover { background: #DCE2DB; }
+  .incall button.on { background: var(--ink); color: #fff; }
+  .incall button[disabled] { opacity: .4; cursor: default; }
+  .consultbar { background: var(--ring-soft); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .consult-who { font-size: 13px; color: var(--ink); }
+  .consult-who b { font-weight: 600; }
+  .consult-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .consult-acts button { height: 38px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+  .c-complete { background: var(--line); color: #fff; grid-column: 1 / -1; }
+  .c-conf { background: var(--ink); color: #fff; }
+  .c-cancel { background: var(--hang-soft); color: var(--hang); }
+
+  /* ---- heard (caller's speech) ---- */
+  .msg.heard { align-self: flex-start; background: #fff; border: 1.5px solid var(--rule); border-radius: 14px 14px 14px 4px; padding: 9px 14px; }
+  .msg.heard .t { display: block; font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .listening { color: var(--ink-3); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .listening input { margin: 0; }
+
+  /* ---- contacts / recent tabs ---- */
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { padding: 4px 10px; border-radius: 6px; color: var(--ink-2); font-weight: 500; }
+  .tabs button.on { background: var(--ink); color: #fff; }
+  .recent { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; padding: 6px 4px 6px 6px; border-radius: 8px; }
+  .recent:hover { background: var(--bench); }
+  .recent .arrow { color: var(--ink-3); font-size: 16px; line-height: 1; }
+  .recent.missed .arrow, .recent.missed .name { color: var(--hang); }
+  .recent .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent .meta { color: var(--ink-2); font-size: 12px; }
+  .list:empty.recent-list::before { content: "No calls yet."; }
+  .recent .dial { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--line); background: var(--line-soft); }
+  .recent .dial:hover { background: var(--line); color: #fff; }
+  .recent .dial[disabled] { color: var(--ink-3); background: none; cursor: default; }
+  .recent .dial svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* ---- team toolbar, details, toasts ---- */
+  .team-tools { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 6px; }
+  .team-tools[hidden] { display: none; }
+  .tsearch { position: relative; }
+  .tsearch input { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 30px 8px 12px; border: 1.5px solid var(--rule); border-radius: 10px; background: var(--paper); color: var(--ink); }
+  .tsearch input:focus { outline: 2px solid var(--line); outline-offset: 1px; border-color: transparent; }
+  .tsearch input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+  .tsearch .qx { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 50%; color: var(--ink-2); font-size: 16px; line-height: 1; }
+  .tsearch .qx:hover { background: var(--bench); color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .chips button { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1.5px solid var(--rule); color: var(--ink-2); background: var(--paper); }
+  .chips button:hover { border-color: var(--ink-3); color: var(--ink); }
+  .chips button.on { background: var(--line); border-color: var(--line); color: #fff; }
+  .chips button.on .n { color: rgba(255,255,255,.85); }
+  .chips button .n { margin-left: 4px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .chips select { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink-2); max-width: 160px; }
+  .chips .reset { border: 0; color: var(--line); background: none; }
+  .team-list .empty { color: var(--ink-2); font-size: 13px; padding: 20px 6px; text-align: center; }
+  mark { background: var(--ring-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .teammate .nm2 { cursor: pointer; }
+  .teammate.stale .dot2 { opacity: .35; }
+  .teammate.stale .st2::after { content: ' · stale'; color: var(--ink-3); }
+  .teammate.offline .dot2 { background: var(--ink-3); opacity: .5; }
+  .teammate.unknown .dot2 { background: transparent; border: 2px solid var(--ink-3); box-sizing: border-box; }
+  .teammate .acts .tbtn.bell { visibility: visible; color: var(--ink-3); padding: 4px 6px; }
+  .teammate .acts .tbtn.bell.on { color: var(--ring); }
+  dialog.person-dlg { width: min(400px, 94vw); }
+  .pd-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .pd-head .dot2 { width: 14px; height: 14px; border-radius: 50%; background: var(--ink-3); flex: none; }
+  .pd-name { font-size: 17px; font-weight: 600; }
+  .pd-state { font-size: 13px; color: var(--ink-2); }
+  .pd-fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font-size: 13px; }
+  .pd-fields dt { color: var(--ink-2); } .pd-fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .pd-fields dd.muted { color: var(--ink-3); }
+  .pd-watch { border-top: 1px solid var(--rule); padding-top: 10px; margin-bottom: 8px; }
+  .pd-watch-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .pd-watch-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 4px; }
+  .pd-watch label.check, .pd-watch-opts label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; margin: 0; }
+  .pd-watch input { width: auto; }
+  #pd-acts { display: flex; gap: 6px; }
+  #pd-acts button { font-size: 13px; padding: 6px 12px; border-radius: 8px; background: var(--line-soft); color: var(--line); font-weight: 600; }
+  .toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast { background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 10px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: 300px; animation: toastin .2s ease-out; }
+  .toast b { font-weight: 600; }
+  @keyframes toastin { from { opacity: 0; transform: translateY(6px); } }
+
+  /* ---- team (admin monitor) ---- */
+  .teammate { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; padding: 8px 4px 8px 6px; border-radius: 8px; }
+  .teammate:hover { background: var(--bench); }
+  .teammate .dot2 { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+  .teammate.available .dot2 { background: var(--line); box-shadow: 0 0 0 3px var(--line-soft); }
+  .teammate.oncall .dot2, .teammate.onhold .dot2 { background: var(--ring); box-shadow: 0 0 0 3px var(--ring-soft); }
+  .teammate.ringing .dot2 { background: var(--hang); box-shadow: 0 0 0 3px var(--hang-soft); animation: flash .7s steps(1,end) infinite; }
+  .teammate.dialing .dot2 { background: var(--ring); animation: pulse 1s infinite; }
+  .teammate.dnd .dot2 { background: var(--hang); position: relative; }
+  .teammate.dnd .dot2::after { content: ''; position: absolute; left: -2px; right: -2px; top: 4px; height: 2px; background: #fff; transform: rotate(-45deg); border-radius: 2px; }
+  .teammate.error .dot2 { background: var(--ink-3); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  @keyframes flash { 0% { opacity: 1; } 50% { opacity: .12; } 100% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .teammate.ringing .dot2, .teammate.dialing .dot2 { animation: none; }
+    .teammate.ringing .dot2 { box-shadow: 0 0 0 3px var(--hang); }
+  }
+  .teammate .who2 { min-width: 0; }
+  .teammate .nm2 { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .teammate .st2 { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .teammate.oncall .st2 b, .teammate.onhold .st2 b { color: var(--ink); font-weight: 600; }
+  .teammate.ringing .st2, .teammate.ringing .st2 b { color: var(--hang); font-weight: 600; }
+  .teammate.dnd .st2 { color: var(--hang); font-weight: 500; }
+  .teammate .dur2 { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .teammate .ext2 { font-weight: 400; color: var(--ink-3); font-size: 12px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .teammate .acts { display: flex; align-items: center; gap: 2px; }
+  .teammate .acts .tbtn { font-size: 12px; font-weight: 500; color: var(--ink-2); padding: 4px 8px; border-radius: 6px; white-space: nowrap; visibility: hidden; }
+  .teammate:hover .acts .tbtn, .teammate:focus-within .acts .tbtn { visibility: visible; }
+  .teammate .acts .tbtn:hover { background: var(--bench); color: var(--ink); }
+  .teammate .acts .tbtn.pickup { color: var(--line); background: var(--line-soft); visibility: visible; }
+  .teammate .acts .tbtn.pickup:hover { background: var(--line); color: #fff; }
+  .teammate .acts .dial { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--line); visibility: hidden; }
+  .teammate:hover .acts .dial, .teammate:focus-within .acts .dial { visibility: visible; }
+  .teammate .acts .dial:hover { background: var(--line-soft); }
+  .teammate .acts .dial svg { width: 17px; height: 17px; fill: currentColor; }
+  .dept-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 4px 4px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  .dept-hdr .dept-name { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .dept-hdr .dept-count { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .dept-hdr + .teammate { margin-top: 0; }
+  .svc-hdr { margin-top: 14px; }
+  .contact.svc .name { font-weight: 500; }
+  .s-svc { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 6px 0 4px; }
+  .s-svc label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  .team-foot { font-size: 12px; color: var(--ink-3); padding: 8px 4px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
+  .team-foot.err { color: var(--hang); }
+
+  /* ---- contacts ---- */
+  .contacts { border-top: 1px solid var(--rule); padding-top: 12px; display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: 1; }
+  .contacts .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+  .contacts .head span { font-weight: 600; }
+  .contacts .head button { color: var(--ink-2); font-size: 13px; padding: 2px 6px; border-radius: 6px; }
+  .contacts .head button:hover { background: rgba(0,0,0,.05); color: var(--ink); }
+  .contacts .list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 80px; }
+  .contacts .list:empty::before { content: "No contacts yet. Add one to call with a click."; color: var(--ink-3); font-size: 13px; }
+  .contacts .list.recent-list:empty::before { content: "No calls yet."; }
+  .contact { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 8px; }
+  .contact:hover { background: var(--bench); }
+  .contact .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .contact .num { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .contact .dial { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--line); background: var(--line-soft); }
+  .contact .dial:hover { background: var(--line); color: #fff; }
+  .contact .dial[disabled] { color: var(--ink-3); cursor: default; background: none; }
+  .contact .dial svg { width: 20px; height: 20px; fill: currentColor; }
+  .contact .edit { color: var(--ink-3); font-size: 12px; padding: 2px 6px; border-radius: 6px; visibility: hidden; }
+  .contact:hover .edit, .contact:focus-within .edit { visibility: visible; }
+  .contact .edit:hover { color: var(--ink); }
+  .contact .side { display: flex; align-items: center; gap: 2px; }
+
+  dialog.contact-dlg { width: min(400px, 92vw); }
+  dialog.contact-dlg label { display: block; font-size: 13px; color: var(--ink-2); margin: 10px 0 4px; }
+  dialog.contact-dlg input { width: 100%; font: inherit; padding: 9px 10px; border: 1.5px solid var(--rule); border-radius: 8px; }
+  dialog.contact-dlg .row { justify-content: space-between; }
+  dialog.contact-dlg .danger { color: var(--hang); }
+
+  .tabs .tab-edit { padding: 4px 7px; color: var(--ink-3); font-weight: 700; letter-spacing: 1px; }
+  .tabs .tab-edit:hover { color: var(--ink); background: var(--bench); }
+  .tabs { flex-wrap: wrap; }
+  dialog.boards-dlg { width: min(440px, 94vw); }
+  dialog.boards-dlg label.check { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--ink); font-size: 14px; cursor: pointer; }
+  dialog.boards-dlg label.check input { width: auto; }
+  .pin-row { display: flex; gap: 18px; }
+  .board-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .board-list .brow { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 8px; background: var(--bench); }
+  .board-list .brow small { color: var(--ink-3); margin-left: 6px; }
+  .board-list .brow button { color: var(--line); font-size: 13px; }
+  .board-list:empty::before { content: 'No boards yet.'; color: var(--ink-3); font-size: 13px; }
+  .pick { max-height: 160px; overflow-y: auto; border: 1.5px solid var(--rule); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .pick label.check { font-size: 13px; }
+  .pick:empty::before { content: 'Nothing to pick from yet.'; color: var(--ink-3); font-size: 13px; }
+  .pick label.check small { color: var(--ink-3); margin-left: 4px; }
+  .team-list .missing { opacity: .55; }
+  #board .dept-hdr:first-child { margin-top: 0; }
+
+  /* ---- transcript ---- */
+  .talk { background: var(--panel); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; }
+  .thread { flex: 1; overflow-y: auto; padding: 20px 22px 8px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
+  .thread:empty::before {
+    content: "Dial a number or wait for a call. Once connected, whatever you type here is spoken to the caller.";
+    color: var(--ink-3); max-width: 36ch; margin: auto; text-align: center;
+  }
+  .msg { max-width: 62ch; }
+  .msg.said { align-self: flex-end; background: var(--said); border-radius: 14px 14px 4px 14px; padding: 9px 14px; }
+  .msg.said .t { display: block; font-size: 11px; color: var(--ink-3); text-align: right; margin-top: 2px; }
+  .msg.event { align-self: center; color: var(--ink-2); font-size: 13px; padding: 4px 0; }
+  .msg.event.strong { color: var(--ink); font-weight: 500; }
+  .msg.dtmf { align-self: flex-end; font-size: 13px; color: var(--ink-2); padding: 2px 4px; }
+  .msg.dtmf kbd { font: inherit; background: var(--bench); border-radius: 4px; padding: 1px 6px; letter-spacing: .15em; }
+
+  .compose { border-top: 1px solid var(--rule); padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .phrases { display: flex; flex-wrap: wrap; gap: 6px; }
+  .phrases button { background: var(--bench); border-radius: 999px; padding: 5px 12px; font-size: 13px; color: var(--ink-2); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phrases button:hover { color: var(--ink); background: #DCE2DB; }
+  .phrases .edit { background: none; color: var(--ink-3); }
+  .phrases .script { background: var(--line-soft); color: var(--line); font-weight: 600; }
+  .phrases .script:hover { background: var(--line); color: #fff; }
+  .phrases .script[disabled] { opacity: .55; }
+  .scriptbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--line-soft); color: var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .scriptbar button { background: var(--line); color: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+  dialog.script-dlg { width: min(560px, 96vw); }
+  .sc-row { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+  .sc-row select { flex: 1; font: inherit; padding: 7px 10px; border: 1.5px solid var(--rule); border-radius: 8px; background: #fff; }
+  .sc-row .ghost, dialog.script-dlg .ghost { background: var(--bench); color: var(--ink); font-weight: 600; border-radius: 8px; padding: 7px 12px; white-space: nowrap; }
+  .sc-hint { font-size: 12px; color: var(--ink-2); }
+  .sc-hint code { background: var(--bench); padding: 0 4px; border-radius: 4px; }
+  .sc-steps-head, .sc-step { display: grid; grid-template-columns: 1fr 96px 60px; gap: 6px; align-items: start; }
+  .sc-steps-head { font-size: 12px; color: var(--ink-2); margin-top: 10px; padding: 0 2px; }
+  .sc-steps { display: flex; flex-direction: column; gap: 6px; max-height: 44vh; overflow-y: auto; margin-top: 4px; }
+  .sc-step textarea { width: 100%; font: inherit; padding: 7px 10px; border: 1.5px solid var(--rule); border-radius: 8px; resize: none; height: 38px; min-height: 38px; max-height: 140px; overflow-y: auto; }
+  .sc-step input { width: 100%; font: inherit; padding: 7px 8px; border: 1.5px solid var(--rule); border-radius: 8px; text-align: center; }
+  .sc-step .mv { display: flex; gap: 2px; }
+  .sc-step .mv button { padding: 4px 5px; font-size: 12px; color: var(--ink-2); border-radius: 6px; }
+  .sc-step .mv button:hover { background: var(--bench); color: var(--ink); }
+  .box { display: flex; gap: 10px; align-items: flex-end; border: 1.5px solid var(--rule); border-radius: 12px; padding: 8px 8px 8px 14px; }
+  .box:focus-within { border-color: var(--ink); }
+  textarea { flex: 1; border: 0; background: none; resize: none; font: inherit; line-height: 1.4; max-height: 140px; padding: 6px 0; }
+  textarea:focus { outline: none; }
+  .speak { background: var(--ink); color: #fff; border-radius: 9px; padding: 10px 16px; font-weight: 600; }
+  .speak[disabled] { opacity: .3; cursor: default; }
+  .stop { color: var(--hang); padding: 10px 6px; font-weight: 500; }
+  .status { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 13px; min-height: 18px; }
+  .status .speaking { color: var(--line); }
+  .status .err { color: var(--hang); }
+
+  dialog { border: 0; border-radius: 12px; padding: 20px; width: min(520px, 92vw); }
+  dialog textarea { width: 100%; height: 180px; border: 1.5px solid var(--rule); border-radius: 8px; padding: 10px; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  dialog .row button { padding: 8px 14px; border-radius: 8px; }
+  dialog .row .primary { background: var(--ink); color: #fff; }
+
+
+  /* ---- Team view only (no phone line) ---- */
+  body.presence .app { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
+  body.presence .talk, body.presence #number, body.presence #keys, body.presence #callstate, body.presence #actions,
+  body.presence #incall, body.presence #consultbar, body.presence #hint, body.presence #reregister,
+  body.presence #tab-contacts, body.presence #tab-recent, body.presence #btn-addcontact { display: none !important; }
+  body.presence .contacts { border-top: 0; padding-top: 0; }
+  body.presence .dialer { padding-top: 10px; }
+  body.presence .reg.neutral .dot { background: var(--ink-3); }
+  .reg.neutral .dot { background: var(--ink-3); box-shadow: none; }
+  .mode-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 2px; }
+  .mode-pick label { display: block; border: 1.5px solid var(--rule); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .mode-pick label:has(input:checked) { border-color: var(--ink); background: var(--said); }
+  .mode-pick input { margin: 0 6px 0 0; }
+  .mode-pick b { font-weight: 600; }
+  .mode-pick small { display: block; color: var(--ink-2); margin-top: 3px; font-size: 12px; }
+  .updbar { grid-column: 1 / -1; background: var(--line-soft); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-top: -6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .updbar b { font-weight: 600; }
+  .updbar button { background: var(--line); color: #fff; border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 13px; }
+  .updbar .link { background: none; color: var(--ink-2); text-decoration: underline; padding: 0; font-weight: 400; }
+  .app:has(> .updbar:not([hidden])) { grid-template-rows: 56px auto 1fr; }
+  .app:has(> .warnbar:not([hidden])):has(> .updbar:not([hidden])) { grid-template-rows: 56px auto auto 1fr; }
+  .s-ver { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; font-size: 14px; }
+  .s-ver button, .s-file label { background: var(--bench); border-radius: 8px; padding: 7px 12px; font-weight: 500; font-size: 14px; cursor: pointer; display: inline-block; }
+  .s-ver button:hover, .s-file label:hover { background: #DCE2DB; }
+  .s-file input { display: none; }
+  .s-upd-msg { font-size: 13px; color: var(--ink-2); margin-top: 6px; min-height: 18px; }
+  .s-upd-msg.ok { color: var(--line); } .s-upd-msg.bad { color: var(--hang); }
+  .s-btn { background: var(--bench); border-radius: 8px; padding: 7px 12px; font-weight: 500; font-size: 14px; color: var(--ink); text-decoration: none; display: inline-block; }
+  .s-btn:hover { background: #DCE2DB; }
+  .s-steps { margin: 8px 0 4px; padding-left: 20px; font-size: 14px; color: var(--ink-2); }
+  .s-steps li { margin: 2px 0; }
+  .s-note { display: block; font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .s-note code { font-size: 12px; background: var(--bench); padding: 1px 4px; border-radius: 4px; }
+  .s-upd-notes { white-space: pre-wrap; font-size: 12px; color: var(--ink-2); background: var(--bench); border-radius: 8px; padding: 8px 10px; margin-top: 8px; max-height: 160px; overflow: auto; }
+
+  /* ---- settings sheet ---- */
+  .top .gear { display: inline-flex; align-items: center; gap: 6px; }
+  .top .gear svg { width: 16px; height: 16px; fill: currentColor; }
+  .top .gear.attn { color: var(--hang); background: var(--hang-soft); }
+  body.embed .top .gear .gl { display: none; }
+  dialog.settings { margin: 0 0 0 auto; height: 100%; max-height: 100%; max-width: 100%; width: min(460px, 100vw); border-radius: 0; padding: 0;
+                    display: flex; flex-direction: column; background: var(--panel); }
+  dialog.settings:not([open]) { display: none; }
+  dialog.settings::backdrop { background: rgba(21,38,43,.35); }
+  .s-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 10px; border-bottom: 1px solid var(--rule); }
+  .s-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .s-head button { color: var(--ink-2); padding: 4px 8px; border-radius: 6px; font-size: 20px; line-height: 1; }
+  .s-head button:hover { background: var(--bench); }
+  .s-body { flex: 1; overflow-y: auto; padding: 4px 20px 20px; }
+  .s-welcome { background: var(--line-soft); border-radius: 10px; padding: 10px 12px; margin: 14px 0 0; font-size: 14px; }
+  .s-sec { padding: 14px 0 6px; border-bottom: 1px solid var(--rule); }
+  .feat { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; }
+  .feat-ic { font-size: 18px; text-align: center; }
+  .feat-title { font-weight: 600; font-size: 14px; color: var(--ink); }
+  .feat-desc { font-size: 13px; color: var(--ink-2); }
+  .feat-state { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .feat-state.available { background: var(--line-soft); color: var(--line); }
+  .feat-state.not-configured, .feat-state.model-required { background: var(--ring-soft); color: #8a5a0e; }
+  .feat-state.unavailable, .feat-state.off { background: var(--bench); color: var(--ink-2); }
+  .s-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .s-field input[type=range] { width: 100%; margin: 6px 0; }
+  .s-field output { font-weight: 400; color: var(--ink-2); margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .v-list { display: flex; flex-direction: column; gap: 8px; }
+  .v-card { border: 1.5px solid var(--rule); border-radius: 10px; padding: 10px 12px; background: var(--paper); }
+  .v-card .v-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .v-card .v-name { font-weight: 600; } .v-card .v-name small { font-weight: 400; color: var(--ink-2); margin-left: 6px; }
+  .v-card .v-why { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+  .v-card .v-why.bad { color: #8a5a0e; }
+  .v-card .v-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .v-card .v-acts button, .v-custom button { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 7px; background: var(--bench); color: var(--ink); }
+  .v-card .v-acts button.primary { background: var(--line); color: #fff; }
+  .v-card .v-acts button.danger { color: var(--hang); }
+  .v-card .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--line-soft); color: var(--line); }
+  .v-card .badge.off { background: var(--bench); color: var(--ink-2); }
+  .v-card .v-cfg { margin-top: 8px; border-top: 1px solid var(--rule); padding-top: 6px; }
+  .v-card .v-cfg .s-field { margin: 6px 0; }
+  .v-card progress { width: 100%; height: 8px; margin-top: 6px; }
+  .v-msg { display: block; min-height: 1.2em; margin-top: 4px; color: var(--ink-2); }
+  .v-msg.bad { color: var(--hang); } .v-msg.ok { color: var(--line); }
+  .v-custom { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+  dialog.voice { width: min(520px, 100vw); }
+  .s-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .s-row input:not([type=checkbox]) { flex: 1; font: inherit; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 8px; background: #fff; color: var(--ink); min-width: 0; }
+  .s-row button { font-weight: 600; padding: 8px 14px; border-radius: 8px; white-space: nowrap; }
+  .s-row button.primary { background: var(--ink); color: #fff; }
+  .s-row button.ghost { background: var(--bench); color: var(--ink); }
+  .s-row label.check { display: flex; align-items: center; gap: 6px; flex: 1; font-size: 13px; }
+  .s-row label.check input { width: auto; }
+  .s-sec:last-child { border-bottom: 0; }
+  .s-sec h3 { margin: 0 0 2px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .s-sec > p { margin: 0 0 6px; color: var(--ink-3); font-size: 13px; }
+  .s-field { display: block; margin: 10px 0 0; }
+  .s-field > span { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+  .s-field > small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+  .s-field input:not([type=checkbox]), .s-field select { width: 100%; font: inherit; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 8px; background: #fff; color: var(--ink); }
+  .s-field input:focus, .s-field select:focus { outline: none; border-color: var(--ink); }
+  .s-field.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+  .s-field.check input { margin-top: 3px; }
+  .s-two { display: grid; grid-template-columns: 1fr 110px; gap: 0 10px; }
+  .s-sec details { margin-top: 10px; }
+  .s-sec summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
+  .s-test { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+  .s-test button { background: var(--bench); border-radius: 8px; padding: 7px 12px; font-weight: 500; font-size: 14px; white-space: nowrap; }
+  .s-test button:hover { background: #DCE2DB; }
+  .s-test span { font-size: 13px; color: var(--ink-2); }
+  .s-test span.ok { color: var(--line); } .s-test span.bad { color: var(--hang); }
+  .s-foot { border-top: 1px solid var(--rule); padding: 12px 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .s-msg { font-size: 13px; color: var(--ink-2); min-height: 18px; }
+  .s-msg.bad { color: var(--hang); } .s-msg.ok { color: var(--line); }
+  .s-restart { background: var(--ring-soft); border-radius: 10px; padding: 10px 12px; font-size: 14px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .s-btns { display: flex; justify-content: flex-end; gap: 8px; }
+  .s-btns button, .s-restart button { padding: 9px 16px; border-radius: 8px; font-weight: 600; }
+  .s-btns .primary, .s-restart button { background: var(--ink); color: #fff; }
+  .s-btns .primary[disabled] { opacity: .4; cursor: default; }
+  .app:has(> .warnbar:not([hidden])) { grid-template-rows: 56px auto 1fr; }
+  .warnbar { grid-column: 1 / -1; background: var(--ring-soft); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-top: -6px; }
+  .warnbar button { text-decoration: underline; color: var(--ink); font-size: 13px; padding: 0; }
+
+  @media (prefers-reduced-motion: reduce) { .thread { scroll-behavior: auto; } }
+  @media (max-width: 760px) {
+    .app > * { min-width: 0; }
+    .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px auto 1fr; height: auto; min-height: 100%; }
+    .dialer { overflow: visible; }
+    .talk { min-height: 60vh; }
+    .keys button { height: 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>SIP Phone <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
+    <div class="reg" id="reg"><span class="dot"></span><span id="regtext">Connecting…</span></div>
+    <button class="ghost" id="reregister" title="Register again now">Re-register</button>
+    <button class="ghost gear" id="btn-settings" title="Settings: your SIP account, Team view, voice and audio" aria-label="Settings" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span class="gl">Settings</span></button>
+    <button class="ghost" id="quit" title="Stop the phone and close" hidden>Quit</button>
+  </header>
+  <div class="warnbar" id="warnbar" hidden></div>
+  <div class="updbar" id="updbar" hidden><span>SIP Phone <b id="upd-ver"></b> is available.</span><button type="button" id="upd-install">Install now</button><button type="button" class="link" id="upd-more">What's new</button></div>
+
+  <section class="dialer" aria-label="Dialer">
+    <input class="number" id="number" placeholder="Enter a number" inputmode="tel" autocomplete="off" spellcheck="false">
+    <div class="keys" id="keys">
+      <button data-k="1">1</button><button data-k="2">2<small>ABC</small></button><button data-k="3">3<small>DEF</small></button>
+      <button data-k="4">4<small>GHI</small></button><button data-k="5">5<small>JKL</small></button><button data-k="6">6<small>MNO</small></button>
+      <button data-k="7">7<small>PQRS</small></button><button data-k="8">8<small>TUV</small></button><button data-k="9">9<small>WXYZ</small></button>
+      <button data-k="*">*</button><button data-k="0">0<small>+</small></button><button data-k="#">#</button>
+    </div>
+    <div class="callstate" id="callstate"><span class="what">No call</span></div>
+    <div class="actions" id="actions">
+      <button class="call wide" id="btn-call">Call</button>
+      <button class="answer" id="btn-answer" hidden>Answer</button>
+      <button class="hang" id="btn-hang" hidden>Hang up</button>
+    </div>
+    <div class="incall" id="incall" hidden>
+      <button id="btn-hold">Hold</button>
+      <button id="btn-mute">Mute</button>
+      <button id="btn-transfer">Transfer</button>
+    </div>
+    <div class="consultbar" id="consultbar" hidden>
+      <div class="consult-who" id="consult-who"></div>
+      <div class="consult-acts">
+        <button class="c-complete" id="btn-complete">Complete transfer</button>
+        <button class="c-conf" id="btn-conf">Conference</button>
+        <button class="c-cancel" id="btn-cancel">Cancel</button>
+      </div>
+    </div>
+    <p class="hint" id="hint">Keys dial a number. During a call they send touch tones.</p>
+    <div class="contacts">
+      <div class="head">
+        <div class="tabs" id="tabs"><button id="tab-team" hidden>Team</button><button class="on" id="tab-contacts">Contacts</button><button id="tab-recent">Recent</button><button id="tab-edit" class="tab-edit" title="Pin tabs and make custom boards" aria-label="Edit tabs">⋯</button></div>
+        <button id="btn-addcontact">Add contact</button>
+      </div>
+      <div class="list" id="contacts"></div>
+      <div class="list recent-list" id="recent" hidden></div>
+      <div id="team-tools" class="team-tools" hidden>
+        <div class="tsearch"><input id="team-q" type="search" placeholder="Search name, extension, department…" autocomplete="off" spellcheck="false" aria-label="Search the directory"><button id="team-qx" class="qx" title="Clear" aria-label="Clear search" hidden>×</button></div>
+        <div class="chips" id="team-chips" role="group" aria-label="Presence filters"></div>
+      </div>
+      <div class="list team-list" id="team" hidden></div>
+      <div class="list team-list" id="board" hidden></div>
+    </div>
+  </section>
+
+  <section class="talk" aria-label="Transcript">
+    <div class="thread" id="thread"></div>
+    <div class="compose">
+      <div class="scriptbar" id="scriptbar" hidden><span id="scriptbar-text"></span><button type="button" id="scriptbar-stop">Stop</button></div>
+      <div class="phrases" id="phrases"></div>
+      <div class="box">
+        <textarea id="text" rows="1" placeholder="Type what the caller should hear, then press Enter"></textarea>
+        <button class="stop" id="btn-stop" title="Stop speaking">Stop</button>
+        <button class="speak" id="btn-speak">Speak</button>
+      </div>
+      <div class="status">
+        <span id="ttsstatus"></span>
+        <label class="listening" id="listening" hidden><input type="checkbox" id="stt-on" checked> Transcribe caller</label>
+        <label class="listening"><input type="checkbox" id="ring-on" checked> Ring on incoming calls</label>
+        <span id="err" class="err"></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="scdlg" class="contact-dlg script-dlg" aria-labelledby="sc-title">
+  <form method="dialog">
+    <div class="sc-head"><p id="sc-title" style="margin:0"><b>Scripts</b> <small style="color:var(--ink-2)">— lines spoken one after another on the active call, with a pause between them</small></p></div>
+    <div class="sc-row"><select id="sc-pick" aria-label="Script"></select><button type="button" id="sc-new" class="ghost">New</button><button type="button" id="sc-import" class="ghost">Import file…</button><input type="file" id="sc-file" accept=".txt,.text,.md,.csv" hidden></div>
+    <label for="sc-name">Name</label><input id="sc-name" autocomplete="off" maxlength="60" placeholder="e.g. Appointment reminder">
+    <div class="sc-steps-head"><span>Line</span><span>Pause after (s)</span><span></span></div>
+    <div id="sc-steps" class="sc-steps"></div>
+    <div class="sc-row"><button type="button" id="sc-add" class="ghost">+ Add line</button><span class="sc-hint">Enter in a line adds the next one. Files: one line per row; <code>pause 3</code> between lines sets the wait.</span></div>
+    <div class="row">
+      <span><button value="delete" class="danger" id="sc-delete">Delete</button> <button type="button" id="sc-export" class="ghost">Export</button></span>
+      <span><button value="cancel">Cancel</button> <button value="save" class="primary">Save</button></span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <p style="margin:0 0 8px">Quick phrases, one per line</p>
+    <textarea id="dlgtext"></textarea>
+    <div class="row"><button value="cancel">Cancel</button><button value="save" class="primary">Save phrases</button></div>
+  </form>
+</dialog>
+
+<dialog id="tdlg" class="contact-dlg">
+  <form method="dialog">
+    <p style="margin:0 0 4px">Transfer this call to</p>
+    <label for="tnumber">Number</label><input id="tnumber" inputmode="tel" autocomplete="off" placeholder="Extension or phone number">
+    <div class="phrases" id="tcontacts" style="margin-top:10px"></div>
+    <div class="row" style="justify-content:flex-end"><button value="cancel">Cancel</button> <button value="go" class="primary" id="tdlg-go">Transfer</button></div>
+  </form>
+</dialog>
+
+<dialog id="pdlg" class="contact-dlg person-dlg" aria-labelledby="pd-name">
+  <form method="dialog">
+    <div class="pd-head"><span class="dot2" id="pd-dot"></span><div><div class="pd-name" id="pd-name"></div><div class="pd-state" id="pd-state"></div></div></div>
+    <dl class="pd-fields" id="pd-fields"></dl>
+    <div class="pd-watch">
+      <div class="pd-watch-title">Notify me when this person…</div>
+      <div id="pd-watch-opts" class="pd-watch-opts"></div>
+      <label class="check"><input type="checkbox" id="pd-watch-sound" checked><span>Play a sound</span></label>
+    </div>
+    <div class="row"><span id="pd-acts"></span><span><button value="close">Close</button></span></div>
+  </form>
+</dialog>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<dialog id="cdlg" class="contact-dlg">
+  <form method="dialog">
+    <p style="margin:0" id="cdlg-title">New contact</p>
+    <label for="cname">Name</label><input id="cname" autocomplete="off">
+    <label for="cnumber">Number</label><input id="cnumber" inputmode="tel" autocomplete="off" placeholder="6165550199 or sip:user@host">
+    <div class="row">
+      <button value="delete" class="danger" id="cdlg-delete">Delete</button>
+      <span><button value="cancel">Cancel</button> <button value="save" class="primary" id="cdlg-save">Save contact</button></span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="xdlg" class="contact-dlg boards-dlg">
+  <form method="dialog">
+    <p style="margin:0 0 6px"><b>Tabs</b></p>
+    <div class="pin-row">
+      <label class="check"><input type="checkbox" id="pin-team"><span>Team</span></label>
+      <label class="check"><input type="checkbox" id="pin-contacts"><span>Contacts</span></label>
+      <label class="check"><input type="checkbox" id="pin-recent"><span>Recent</span></label>
+    </div>
+    <p style="margin:14px 0 6px"><b>Custom boards</b> <small style="color:var(--ink-2)">— your own tabs mixing teammates and contacts</small></p>
+    <div id="board-list" class="board-list"></div>
+    <button type="button" id="board-new" class="ghost">+ New board</button>
+    <div class="row" style="margin-top:14px"><span></span><span><button value="cancel">Cancel</button> <button value="save" class="primary">Save</button></span></div>
+  </form>
+</dialog>
+
+<dialog id="bdlg" class="contact-dlg boards-dlg">
+  <form method="dialog">
+    <p style="margin:0" id="bdlg-title">New board</p>
+    <label for="bname">Name</label><input id="bname" autocomplete="off" maxlength="40" placeholder="e.g. Sales floor">
+    <label>Teammates <small style="color:var(--ink-3)">(presence from the Team view)</small></label>
+    <div id="bpick-team" class="pick"></div>
+    <label>Contacts <small style="color:var(--ink-3)">(speed dials)</small></label>
+    <div id="bpick-contacts" class="pick"></div>
+    <div class="row">
+      <button value="delete" class="danger" id="bdlg-delete">Delete</button>
+      <span><button value="cancel">Cancel</button> <button value="save" class="primary">Save board</button></span>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="vdlg" class="settings voice" aria-labelledby="v-title">
+  <form method="dialog" id="vform">
+    <header class="s-head"><h2 id="v-title">Voice engine</h2><button value="close" class="s-close" aria-label="Close">×</button></header>
+    <div class="s-body">
+      <section class="s-sec">
+        <h3>Defaults</h3>
+        <label class="s-field"><span>Text-to-speech provider</span><select id="v-tts"></select></label>
+        <label class="s-field"><span>Voice</span><select id="v-voice"></select><small id="v-voice-hint"></small></label>
+        <label class="s-field"><span>Fallback provider</span><select id="v-fallback"></select><small>Used when the main provider fails, so calls are never silent.</small></label>
+        <label class="s-field"><span>Voice notifications provider</span><select id="v-notify"></select><small>Blank = same as text-to-speech.</small></label>
+        <div class="s-grid2">
+          <label class="s-field"><span>Speaking rate <output id="v-rate-out">1.0×</output></span><input type="range" id="v-rate" min="0.5" max="2" step="0.05"></label>
+          <label class="s-field"><span>Volume <output id="v-volume-out">90%</output></span><input type="range" id="v-volume" min="0" max="1.5" step="0.05"></label>
+        </div>
+        <label class="s-field"><span>Caller transcript (speech-to-text)</span><select id="v-stt"></select></label>
+        <div class="s-row"><input id="v-test-text" placeholder="Hello, this is a test of the voice." spellcheck="false"><button type="button" id="v-test" class="ghost">Test voice</button></div>
+        <small id="v-test-msg" class="v-msg"></small>
+      </section>
+      <section class="s-sec">
+        <h3>Installed providers</h3>
+        <div id="v-providers" class="v-list"></div>
+      </section>
+      <section class="s-sec">
+        <h3>Add a provider</h3>
+        <label class="s-field"><span>Type</span><select id="v-add-type"></select><small id="v-add-desc"></small></label>
+        <div id="v-add-fields"></div>
+        <label class="s-field"><span>Name</span><input id="v-add-name" placeholder="Shown in the list" spellcheck="false"></label>
+        <div class="s-row"><label class="check"><input type="checkbox" id="v-add-default" checked><span>Make it the default</span></label><button type="button" id="v-add" class="primary">Add provider</button></div>
+        <small id="v-add-msg" class="v-msg"></small>
+      </section>
+      <section class="s-sec">
+        <h3>Models</h3>
+        <p>Nothing is bundled with the installer. Download what you need; licenses are shown before you do. Processing for every model here happens on this computer.</p>
+        <label class="s-field"><span>Models folder</span><div class="s-row"><input id="v-models-dir" spellcheck="false"><button type="button" id="v-models-dir-set" class="ghost">Change</button></div></label>
+        <div id="v-models" class="v-list"></div>
+        <div id="v-custom" class="v-custom"></div>
+      </section>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="sdlg" class="settings" aria-labelledby="s-title">
+  <div class="s-head"><h2 id="s-title">Settings</h2><button type="button" id="s-close" aria-label="Close settings">×</button></div>
+  <div class="s-body">
+    <p class="s-welcome" id="s-welcome" hidden>Welcome! Choose how you'll use SIP Phone, fill in what it asks for, and click Save. You can change anything here later.</p>
+
+    <section class="s-sec">
+      <h3>Use SIP Phone as</h3>
+      <div class="mode-pick">
+        <label><input type="radio" name="appmode" value="phone" data-k="app.mode"><b>Phone + Team view</b><small>Registers your SIP line: make and take calls, text-to-speech, transfers, pick-ups.</small></label>
+        <label><input type="radio" name="appmode" value="presence"><b>Team view only</b><small>Just the presence board. No phone line is registered and nothing can be called.</small></label>
+      </div>
+      <p id="s-mode-restart" hidden style="color:var(--ring)">Switching to the phone needs a restart (audio isn't loaded in Team-view-only mode).</p>
+    </section>
+
+    <section class="s-sec" data-app="phone">
+      <h3 id="s-line-title">Phone line</h3>
+      <p id="s-line-hint">From your phone system’s admin portal: the user’s SIP device credentials.</p>
+      <label class="s-field"><span>Display name</span><input data-k="account.display_name" placeholder="Shown at the top and to people you call"></label>
+      <label class="s-field"><span>SIP Username</span><input data-k="account.username" required spellcheck="false"></label>
+      <label class="s-field"><span>Authentication Name</span><input data-k="account.auth_username" spellcheck="false"><small>Leave blank if it's the same as the SIP Username.</small></label>
+      <label class="s-field"><span>Password</span><input data-k="account.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="account.password"></small></label>
+      <label class="s-field"><span>Domain</span><input data-k="account.domain" required spellcheck="false" placeholder="e.g. nextiva.com"></label>
+      <details><summary>Server and network</summary>
+        <div class="s-two">
+          <label class="s-field"><span>Outbound proxy</span><input data-k="account.proxy" spellcheck="false" placeholder="Same as domain"></label>
+          <label class="s-field"><span>Port</span><input data-k="account.proxy_port" inputmode="numeric"></label>
+        </div>
+        <label class="s-field"><span>Local SIP port</span><input data-k="local.bind_port" inputmode="numeric"><small>Change if another phone app already uses 5060. Needs a restart.</small></label>
+      </details>
+    </section>
+
+    <section class="s-sec">
+      <h3>Team view</h3>
+      <p>See which teammates are free, ringing or on a call.</p>
+      <label class="s-field"><span>Presence source</span>
+        <select data-k="presence.mode">
+          <option value="events">User login (events) — recommended</option>
+          <option value="admin">Admin XSI login</option>
+          <option value="">Off</option>
+        </select>
+        <small id="s-mode-hint"></small></label>
+      <div data-mode="events">
+        <label class="s-field"><span>User login</span><input data-k="presence.xsi_user" spellcheck="false" placeholder="Your user ID, e.g. jdoe1234567@example.com"><small>Your own user login, not an admin. The phone system pushes ringing, calls and Do Not Disturb for the people you watch.</small></label>
+        <label class="s-field"><span>Password</span><input data-k="presence.xsi_password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="presence.xsi_password"></small></label>
+      </div>
+      <div data-mode="admin">
+        <label class="s-field"><span>Admin login</span><input data-k="admin.username" spellcheck="false"></label>
+        <label class="s-field"><span>Admin password</span><input data-k="admin.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="admin.password"></small></label>
+        <label class="s-field"><span>Directory user</span><input data-k="admin.directory_user" spellcheck="false" placeholder="e.g. jdoe1234567"><small>A real user whose company directory lists everyone.</small></label>
+      </div>
+      <div data-mode="events admin">
+        <div class="s-field"><span>Also list as speed dials</span>
+          <input type="hidden" data-k="admin.show_services">
+          <div id="s-svc" class="s-svc"></div>
+          <small>Only people get presence. Ticked service types appear in their own section of the Team tab as click-to-call entries; unticked ones are hidden.</small></div>
+        <label class="s-field"><span>Hide from the list</span><input data-k="admin.hide_user" spellcheck="false" placeholder="Your own userId, extension or number"></label>
+        <div class="s-test"><button type="button" id="s-test">Test connection</button><span id="s-test-msg" role="status"></span></div>
+        <details><summary>More Team options</summary>
+          <label class="s-field"><span>Xsi server</span><input data-k="admin.xsi_host" spellcheck="false" placeholder="https://xsi.nextiva.com"></label>
+          <label class="s-field"><span>Pick-up code</span><input data-k="admin.pickup_code" spellcheck="false"><small>Dialed before a teammate's extension to answer their ringing call.</small></label>
+          <div data-mode="events admin">
+            <label class="s-field"><span>Only watch these users</span><input data-k="admin.users" spellcheck="false" placeholder="Comma-separated user IDs; blank = the whole directory"></label>
+          </div>
+          <div data-mode="admin">
+            <label class="s-field"><span>Refresh (sec)</span><input data-k="admin.poll_seconds" inputmode="decimal"></label>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="s-sec" data-app="phone">
+      <h3>Voice engine</h3>
+      <p>Text-to-speech for what you type to the caller, voice notifications, and the caller transcript. Bring your own models or voices; switching takes effect on the next sentence.</p>
+      <div class="feat" id="feat-tts"><div class="feat-ic">🗣</div><div class="feat-body"><div class="feat-title">Text-to-speech</div><div class="feat-desc" id="feat-tts-desc">—</div></div><span class="feat-state" id="feat-tts-state"></span></div>
+      <div class="feat" id="feat-stt"><div class="feat-ic">📝</div><div class="feat-body"><div class="feat-title">Caller transcript</div><div class="feat-desc" id="feat-stt-desc">—</div></div><span class="feat-state" id="feat-stt-state"></span></div>
+      <div class="feat" id="feat-vn"><div class="feat-ic">🔔</div><div class="feat-body"><div class="feat-title">Voice notifications</div><div class="feat-desc" id="feat-vn-desc">Availability notifications are spoken with the provider assigned below.</div></div><span class="feat-state" id="feat-vn-state"></span></div>
+      <div class="s-row"><button type="button" id="s-voice-open" class="primary">Manage voice providers</button></div>
+    </section>
+
+    <section class="s-sec" data-app="phone">
+      <h3>Audio</h3>
+      <label class="s-field"><span>Microphone</span><select data-k="audio.input_device"></select></label>
+      <label class="s-field"><span>Speaker</span><select data-k="audio.output_device"></select><small id="s-audio-hint">Takes effect after a restart.</small></label>
+    </section>
+
+    <section class="s-sec">
+      <h3>Startup</h3>
+      <label class="s-field check"><input type="checkbox" data-k="app.start_with_windows"><span>Start SIP Phone when I sign in<small style="display:block;color:var(--ink-2)">Runs in the background, so the browser extension and the Start-menu shortcut find it already running.</small></span></label>
+      <label class="s-field check"><input type="checkbox" data-k="app.debug"><span>Write a full SIP trace to app.log<small style="display:block;color:var(--ink-2)">For troubleshooting registration or Team view with support. Needs a restart; turn it off afterwards.</small></span></label>
+    </section>
+
+    <section class="s-sec" id="s-ext">
+      <h3>Browser extension</h3>
+      <p>Chrome or Edge: the phone in the side panel, right-click-to-call, call pop-ups.</p>
+      <div class="s-ver"><span>Add it to your browser</span><span><a class="s-btn" id="s-ext-zip" href="/api/extension.zip" download>Download extension zip</a> <button type="button" id="s-ext-open">Open extensions page</button></span></div>
+      <ol class="s-steps">
+        <li>On the extensions page, turn on <b>Developer mode</b>.</li>
+        <li>Drag the downloaded zip onto that page.</li>
+        <li>Pin SIP Phone from the puzzle-piece menu.</li>
+      </ol>
+      <label class="s-field"><span>Chrome Web Store extension ID</span><input data-k="extension.store_id" spellcheck="false" placeholder="32 letters from the store link (optional)"><small>If your team installs the extension from the Chrome Web Store, paste its ID here so the app accepts it. Applies immediately.</small></label>
+      <small class="s-note">When the extension files change, SIP Phone saves a new zip to Downloads and the extension asks you to drop it again. Alternative: "Load unpacked" with the folder <code id="s-ext-folder"></code> — that copy updates itself.</small>
+      <div class="s-test" style="margin-top:10px"><span id="s-bridge" role="status"></span><button type="button" id="s-bridge-fix" hidden>Connect now</button></div>
+      <div class="s-upd-msg" id="s-ext-msg"></div>
+    </section>
+
+    <section class="s-sec" id="s-updates">
+      <h3>Updates</h3>
+      <div class="s-ver"><span>Version <b id="s-cur-ver"></b><span id="s-avail"></span></span><span><button type="button" id="s-check" hidden>Check now</button> <span class="s-file"><label for="s-file">Install from file…</label><input type="file" id="s-file" accept=".whl,.zip"></span></span></div>
+      <div class="s-upd-msg" id="s-upd-msg"></div>
+      <details><summary>Update source (for teams)</summary>
+        <label class="s-field"><span>Folder, network share or https:// address</span><input data-k="update.source" spellcheck="false" placeholder="e.g. \\server\share\sipphone"><small>Drop new sipphone-*.whl files there (or host a latest.json) and every copy of SIP Phone offers the update.</small></label>
+        <label class="s-field check"><input type="checkbox" data-k="update.auto"><span>Install updates automatically when no call is active</span></label>
+      </details>
+    </section>
+  </div>
+  <div class="s-foot">
+    <div class="s-restart" id="s-restart" hidden><span id="s-restart-text">Restart to apply the new settings.</span><button type="button" id="s-restart-btn">Restart</button></div>
+    <div class="s-msg" id="s-msg" role="status"></div>
+    <div class="s-btns"><button type="button" id="s-cancel">Close</button><button type="button" class="primary" id="s-save">Save</button></div>
+  </div>
+</dialog>
+
+<script>
+if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+(() => {
+  const $ = id => document.getElementById(id);
+  const number = $('number'), thread = $('thread'), text = $('text');
+  let lastEvent = 0, call = null, tts = null, registered = false, presenceMode = false;
+
+  const api = async (path, body) => {
+    const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+    const j = await r.json();
+    if (j.error) { showErr(j.error); throw new Error(j.error); }
+    showErr('');
+    return j;
+  };
+  const showErr = m => { $('err').textContent = m; };
+  const inCall = () => call && call.state !== 'ended';
+  const connected = () => call && call.state === 'connected';
+
+  // ---- dial pad ----
+  $('keys').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = b.dataset.k;
+    if (connected()) { api('/api/dtmf', {digits: k}).catch(() => {}); }
+    else { number.value += k; number.focus(); }
+  });
+  number.addEventListener('keydown', e => { if (e.key === 'Enter') doCall(); });
+  const doCall = () => { if (number.value.trim()) api('/api/call', {number: number.value}).catch(() => {}); };
+  $('btn-call').onclick = doCall;
+  $('btn-answer').onclick = () => api('/api/answer').catch(() => {});
+  $('btn-hang').onclick = () => api('/api/hangup').catch(() => {});
+  $('reregister').onclick = () => api('/api/register').catch(() => {});
+  $('quit').onclick = () => { if (!inCall() || confirm('A call is active. Hang up and quit?')) api('/api/quit').then(() => { document.title = 'SIP Phone stopped'; }).catch(() => {}); };
+  $('btn-hold').onclick = () => api('/api/hold').catch(() => {});
+  $('btn-mute').onclick = () => api('/api/mute').catch(() => {});
+  $('btn-transfer').onclick = () => {
+    $('tnumber').value = '';
+    const box = $('tcontacts'); box.innerHTML = '';
+    for (const c of contacts) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name;
+      b.onclick = () => { $('tnumber').value = c.number; };
+      box.appendChild(b);
+    }
+    $('tdlg').showModal(); $('tnumber').focus();
+  };
+  $('tdlg').addEventListener('close', () => {
+    if ($('tdlg').returnValue === 'go' && $('tnumber').value.trim())
+      api('/api/transfer', {target: $('tnumber').value}).catch(() => {});
+  });
+  $('btn-complete').onclick = () => api('/api/consult-complete').catch(() => {});
+  $('btn-conf').onclick = () => api('/api/conference', {}).catch(() => {});
+  $('btn-cancel').onclick = () => api('/api/consult-cancel').catch(() => {});
+  $('stt-on').onchange = e => api('/api/stt', {enabled: e.target.checked}).catch(() => {});
+
+  // ---- ringer (Web Audio, US two-tone cadence) ----
+  let actx = null, ringTimer = null, ringing = false;
+  const ringBurst = () => {
+    if (!actx) return;
+    const g = actx.createGain(); g.gain.value = 0.08; g.connect(actx.destination);
+    for (const f of [440, 480]) { const o = actx.createOscillator(); o.frequency.value = f; o.connect(g); o.start(); o.stop(actx.currentTime + 1.8); }
+  };
+  const startRing = () => {
+    if (ringing || !$('ring-on').checked) return;
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { return; }
+    ringing = true; ringBurst(); ringTimer = setInterval(ringBurst, 4000);
+  };
+  const stopRing = () => { ringing = false; if (ringTimer) clearInterval(ringTimer); ringTimer = null; };
+  try { $('ring-on').checked = localStorage.getItem('ring') !== 'off'; } catch (e) {}
+  $('ring-on').onchange = e => { try { localStorage.setItem('ring', e.target.checked ? 'on' : 'off'); } catch (x) {} if (!e.target.checked) stopRing(); };
+
+  // ---- speak ----
+  const speak = () => {
+    const t = text.value.trim(); if (!t) return;
+    api('/api/say', {text: t}).then(() => { text.value = ''; autosize(); }).catch(() => {});
+  };
+  $('btn-speak').onclick = speak;
+  $('btn-stop').onclick = () => api('/api/shh').catch(() => {});
+  text.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); speak(); } });
+  const autosize = () => { text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 140) + 'px'; };
+  text.addEventListener('input', autosize);
+
+  // ---- quick phrases ----
+  let phrases = [];
+  const renderPhrases = () => {
+    const box = $('phrases'); box.innerHTML = '';
+    for (const p of phrases) {
+      const b = document.createElement('button'); b.textContent = p; b.title = p;
+      b.onclick = () => { text.value = p; autosize(); if (connected()) speak(); else text.focus(); };
+      box.appendChild(b);
+    }
+    const e = document.createElement('button'); e.className = 'edit'; e.textContent = 'Edit phrases';
+    e.onclick = () => { $('dlgtext').value = phrases.join('\n'); $('dlg').showModal(); };
+    box.appendChild(e);
+    try { renderScripts(); } catch (x) {}
+  };
+  fetch('/api/phrases').then(r => r.json()).then(j => { phrases = j.phrases; renderPhrases(); });
+  $('dlg').addEventListener('close', () => {
+    if ($('dlg').returnValue !== 'save') return;
+    api('/api/phrases', {phrases: $('dlgtext').value.split('\n')}).then(j => { phrases = j.phrases; renderPhrases(); });
+  });
+
+  // ---- call scripts ----
+  let scripts = [], scDefaultPause = 2, scEditing = null, lastScriptKey = '';
+  const renderScripts = () => {
+    const box = $('phrases');
+    box.querySelectorAll('.script, .sc-edit').forEach(b => b.remove());
+    const edit = box.querySelector('.edit');
+    for (const sc of scripts) {
+      const b = document.createElement('button'); b.className = 'script'; b.textContent = '▶ ' + sc.name; b.title = sc.steps.length + ' lines — play on the active call';
+      b.disabled = !connected() || !tts;
+      b.onclick = () => api('/api/scripts/run', {id: sc.id}).catch(e => { $('err').textContent = e.message; });
+      box.insertBefore(b, edit);
+    }
+    const e = document.createElement('button'); e.className = 'edit sc-edit'; e.textContent = scripts.length ? 'Edit scripts' : 'Add a script';
+    e.onclick = () => openScripts(scripts.length ? scripts[0].id : '');
+    box.insertBefore(e, edit);
+  };
+  const loadScripts = () => fetch('/api/scripts').then(r => r.json()).then(j => { scripts = j.scripts || []; scDefaultPause = j.default_pause || 2; renderScripts(); });
+  const scStepRow = (st) => {
+    const r = document.createElement('div'); r.className = 'sc-step';
+    const ta = document.createElement('textarea'); ta.rows = 1; ta.value = st.text || ''; ta.placeholder = 'What to say';
+    const grow = () => { ta.style.height = '38px'; ta.style.height = Math.min(ta.scrollHeight + 2, 140) + 'px'; };
+    ta.addEventListener('input', grow); setTimeout(grow, 0);
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const n = scStepRow({text: '', pause: scDefaultPause}); r.after(n); n.querySelector('textarea').focus(); } });
+    const p = document.createElement('input'); p.type = 'number'; p.min = 0; p.max = 600; p.step = 0.5; p.value = st.pause ?? scDefaultPause; p.setAttribute('aria-label', 'Pause after, seconds');
+    const mv = document.createElement('div'); mv.className = 'mv';
+    const mk = (t, fn, title) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.title = title; b.onclick = fn; mv.appendChild(b); };
+    mk('↑', () => { if (r.previousElementSibling) r.previousElementSibling.before(r); }, 'Move up');
+    mk('↓', () => { if (r.nextElementSibling) r.nextElementSibling.after(r); }, 'Move down');
+    mk('×', () => { r.remove(); if (!$('sc-steps').children.length) $('sc-steps').appendChild(scStepRow({text: '', pause: scDefaultPause})); }, 'Remove line');
+    r.append(ta, p, mv);
+    return r;
+  };
+  const scFill = (sc) => {
+    scEditing = sc;
+    $('sc-name').value = sc.name || '';
+    const box = $('sc-steps'); box.innerHTML = '';
+    for (const st of (sc.steps && sc.steps.length ? sc.steps : [{text: '', pause: scDefaultPause}])) box.appendChild(scStepRow(st));
+    $('sc-delete').style.visibility = sc.id ? 'visible' : 'hidden';
+    $('sc-export').hidden = !sc.id;
+    const pick = $('sc-pick'); pick.innerHTML = '';
+    for (const s of scripts) { const o = document.createElement('option'); o.value = s.id; o.textContent = s.name; pick.appendChild(o); }
+    if (!sc.id) { const o = document.createElement('option'); o.value = ''; o.textContent = '(new script)'; pick.appendChild(o); }
+    pick.value = sc.id || '';
+  };
+  const scCollect = () => ({id: scEditing.id || '', name: $('sc-name').value.trim() || 'Script',
+    steps: [...$('sc-steps').querySelectorAll('.sc-step')].map(r => ({text: r.querySelector('textarea').value.trim(), pause: +r.querySelector('input').value || 0})).filter(s => s.text)});
+  const openScripts = (id) => { scFill(scripts.find(s => s.id === id) || {id: '', name: '', steps: []}); $('scdlg').showModal(); $('sc-name').focus(); };
+  $('sc-pick').onchange = () => { const sc = scripts.find(s => s.id === $('sc-pick').value); if (sc) scFill(sc); };
+  $('sc-new').onclick = () => scFill({id: '', name: '', steps: []});
+  $('sc-add').onclick = () => { const n = scStepRow({text: '', pause: scDefaultPause}); $('sc-steps').appendChild(n); n.querySelector('textarea').focus(); };
+  $('sc-import').onclick = () => $('sc-file').click();
+  $('sc-file').onchange = async () => {
+    const f = $('sc-file').files[0]; if (!f) return;
+    const text = await f.text();
+    try { const j = await api('/api/scripts/import', {name: f.name.replace(/\.[^.]+$/, ''), text, default_pause: scDefaultPause}); scripts = j.scripts; renderScripts(); scFill(scripts[scripts.length - 1]); }
+    catch (e) { alert(e.message); }
+    $('sc-file').value = '';
+  };
+  $('sc-export').onclick = () => { if (scEditing && scEditing.id) window.open('/api/scripts/export?id=' + encodeURIComponent(scEditing.id)); };
+  $('scdlg').addEventListener('close', () => {
+    const v = $('scdlg').returnValue;
+    if (v === 'save') {
+      const sc = scCollect();
+      if (!sc.steps.length) return;
+      const list = scripts.slice(); const i = list.findIndex(s => s.id === sc.id);
+      if (i >= 0) list[i] = sc; else list.push(sc);
+      api('/api/scripts', {scripts: list}).then(j => { scripts = j.scripts; renderScripts(); }).catch(e => alert(e.message));
+    } else if (v === 'delete' && scEditing && scEditing.id) {
+      api('/api/scripts', {scripts: scripts.filter(s => s.id !== scEditing.id)}).then(j => { scripts = j.scripts; renderScripts(); });
+    }
+  });
+  $('scriptbar-stop').onclick = () => api('/api/scripts/stop').catch(() => {});
+  loadScripts();
+
+  // ---- contacts ----
+  const PHONE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>';
+  let contacts = [], editing = -1;
+  const renderContacts = () => {
+    const box = $('contacts'); box.innerHTML = '';
+    contacts.forEach((c, i) => box.appendChild(buildContactRow(c, i)));
+    if (curTab.startsWith('board:')) renderBoard();
+  };
+  const openContact = i => {
+    editing = i;
+    $('cdlg-title').textContent = i < 0 ? 'New contact' : 'Edit contact';
+    $('cname').value = i < 0 ? '' : contacts[i].name;
+    $('cnumber').value = i < 0 ? number.value : contacts[i].number;
+    $('cdlg-delete').style.visibility = i < 0 ? 'hidden' : 'visible';
+    $('cdlg').showModal(); $('cname').focus();
+  };
+  $('btn-addcontact').onclick = () => openContact(-1);
+  $('cdlg').addEventListener('close', () => {
+    const v = $('cdlg').returnValue;
+    if (v === 'save') {
+      const c = {name: $('cname').value.trim(), number: $('cnumber').value.trim()};
+      if (!c.number) return;
+      if (editing < 0) contacts.push(c); else contacts[editing] = c;
+    } else if (v === 'delete' && editing >= 0) contacts.splice(editing, 1);
+    else return;
+    api('/api/contacts', {contacts}).then(j => { contacts = j.contacts; renderContacts(); });
+  });
+  fetch('/api/contacts').then(r => r.json()).then(j => { contacts = j.contacts; renderContacts(); });
+
+  // ---- recent calls ----
+  const fmtDay = t => { const d = new Date(t * 1000), now = new Date();
+    return d.toDateString() === now.toDateString() ? d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})
+         : d.toLocaleDateString([], {month: 'short', day: 'numeric'}); };
+  let lastHistoryLen = -1;
+  const loadRecent = async () => {
+    const j = await (await fetch('/api/history')).json();
+    const box = $('recent'); box.innerHTML = '';
+    for (const h of j.history) {
+      const row = document.createElement('div'); row.className = 'recent' + (h.outcome === 'missed' ? ' missed' : '');
+      const ar = document.createElement('span'); ar.className = 'arrow'; ar.textContent = h.direction === 'in' ? '↙' : '↗';
+      ar.title = h.direction === 'in' ? 'Incoming' : 'Outgoing';
+      const info = document.createElement('div');
+      const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = h.name || h.number;
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const what = {answered: h.duration ? `${Math.floor(h.duration / 60)}:${String(h.duration % 60).padStart(2, '0')}` : 'answered',
+                    missed: 'Missed', declined: 'Declined', cancelled: 'Cancelled', failed: h.reason || 'Failed'}[h.outcome] || h.outcome;
+      meta.textContent = `${fmtDay(h.t)} · ${what}` + (h.name ? ` · ${h.number}` : '');
+      info.append(nm, meta);
+      const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
+      dial.title = 'Call ' + (h.name || h.number); dial.setAttribute('aria-label', 'Call back ' + h.number);
+      dial.disabled = !registered || inCall();
+      dial.onclick = () => { number.value = h.number; api('/api/call', {number: h.number}).catch(() => {}); };
+      row.append(ar, info, dial);
+      box.appendChild(row);
+    }
+    lastHistoryLen = j.history.length;
+  };
+  // ---- team / admin monitor ----
+  let teamTimer = null, teamTab = false, teamDefaulted = false, lastState = null;
+  const relTime = t => { if (!t) return ''; const s = Math.floor(Date.now()/1000 - t);
+    if (s < 0 || s > 86400) return '';                       // implausible / bad timestamp
+    const m = Math.floor(s/60), h = Math.floor(m/60);
+    if (s < 60) return s + 's';
+    if (h) return h + ':' + String(m%60).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+    return m + ':' + String(s%60).padStart(2,'0'); };
+  const idNum = (name, num) => (name && num && name !== num) ? (name + ' - ' + num) : (name || num || '');
+  const STATUS = {available:['available','Available'], idle:['available','Available'], 'on-call':['oncall','On a call'], 'on-hold':['onhold','On hold'],
+                  ringing:['ringing','Ringing'], dialing:['dialing','Calling out'], dnd:['dnd','Do Not Disturb'],
+                  offline:['offline','Offline'], error:['error','Unavailable'], unknown:['unknown','Unknown']};
+  const FILTERS = [['available','Available'], ['ringing','Ringing'], ['on-call','On a call'], ['on-hold','On hold'], ['dnd','DND'], ['offline','Offline'], ['unknown','Unknown']];
+  let teamQ = '', teamStatuses = new Set(), teamDept = '';
+  try { const sv = JSON.parse(sessionStorage.getItem('sipphone.teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; } catch (e) {}
+  const saveFilter = () => { try { sessionStorage.setItem('sipphone.teamfilter', JSON.stringify({q: teamQ, statuses: [...teamStatuses], dept: teamDept})); } catch (e) {} };
+  const norm = x => (x || '').toString().toLowerCase();
+  const personMatches = (u, q) => { if (!q) return true; const hay = [u.name, u.first, u.last, u.extension, u.number, u.department, u.title, u.email, u.location, u.user_id].map(norm).join(' '); return q.split(/\s+/).filter(Boolean).every(t => hay.includes(t)); };
+  const hl = (el, text, q) => { el.textContent = ''; const terms = q.split(/\s+/).filter(Boolean); if (!terms.length) { el.textContent = text; return; }
+    const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'ig');
+    for (const part of text.split(re)) { if (!part) continue; const m = part.match(re); const node = m && m[0] === part ? document.createElement('mark') : document.createTextNode(''); if (node.nodeType === 1) { node.textContent = part; el.appendChild(node); } else el.appendChild(document.createTextNode(part)); } };
+  let watchRules = {};
+  let lastTeam = null;                                   // latest /api/monitor snapshot
+  const fetchTeam = async () => { try { lastTeam = await (await fetch('/api/monitor')).json(); } catch (e) {} return lastTeam; };
+  const buildRow = (u) => {
+      const [cls, label] = STATUS[u.status] || ['', u.status];
+      const row = document.createElement('div'); row.className = 'teammate ' + cls;
+      const dot = document.createElement('span'); dot.className = 'dot2';
+      const who = document.createElement('div'); who.className = 'who2';
+      if (u.stale) row.classList.add('stale');
+      const nm = document.createElement('div'); nm.className = 'nm2'; hl(nm, u.name, teamQ); nm.title = 'Details'; nm.onclick = () => openPerson(u.user_id);
+      if (u.extension) { const ex = document.createElement('span'); ex.className = 'ext2'; ex.textContent = 'x' + u.extension; nm.appendChild(ex); }
+      const st = document.createElement('div'); st.className = 'st2';
+      const callerId = idNum(u.with_name, u.with_number);     // "Name - Number"
+      if ((u.status === 'on-call' || u.status === 'on-hold') && callerId) {
+        const verb = u.status === 'on-hold' ? 'On hold · ' : (u.direction === 'inbound' ? 'From ' : 'With ');
+        st.innerHTML = verb + '<b></b>'; st.querySelector('b').textContent = callerId;
+      } else if (u.status === 'ringing') {
+        st.innerHTML = callerId ? 'Incoming · <b></b>' : 'Ringing';
+        const b = st.querySelector('b'); if (b) b.textContent = callerId;
+      } else if (u.status === 'error' || (u.status === 'unknown' && u.monitor === 'error')) { st.textContent = u.detail || label; }
+      else if (u.status === 'unknown' && u.monitor === 'not-monitored') { st.textContent = 'Not monitored'; st.title = u.detail || ''; }
+      else { st.textContent = label; }
+      who.append(nm, st);
+
+      const acts = document.createElement('div'); acts.className = 'acts';
+      if (!u.kind) {
+        const bell = document.createElement('button'); bell.className = 'tbtn bell' + (watchRules[u.user_id] ? ' on' : ''); bell.innerHTML = '&#128276;';
+        bell.title = watchRules[u.user_id] ? 'Notifying you: ' + (watchRules[u.user_id].events || []).join(', ') : 'Notify me when…'; bell.setAttribute('aria-label', bell.title);
+        bell.onclick = () => openPerson(u.user_id, true); acts.appendChild(bell);
+      }
+      const num = u.number || u.extension;
+      if ((u.status === 'on-call' || u.status === 'on-hold') && u.since) {
+        const dur = document.createElement('div'); dur.className = 'dur2'; dur.textContent = relTime(u.since);
+        dur.dataset.since = u.since; acts.appendChild(dur);
+      }
+      const act = (txt, cls2, fn, title) => {
+        const b = document.createElement('button'); b.className = 'tbtn ' + (cls2||''); b.textContent = txt;
+        if (title) b.title = title; b.onclick = fn; acts.appendChild(b); return b;
+      };
+      if (presenceMode) {
+        // Team view only: nothing to call with.
+      } else if (connected()) {
+        // On an active call: move this call to / with the teammate.
+        if (num) {
+          act('Transfer', '', () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{}), 'Blind transfer to ' + u.name);
+          act('Warm', '', () => api('/api/consult', {target: num}).catch(()=>{}), 'Attended (warm) transfer to ' + u.name);
+          act('Conf', '', () => api('/api/conference', {target: num}).catch(()=>{}), 'Conference ' + u.name + ' in');
+        }
+      } else {
+        const dn = (u.number || '').replace(/^\+?1?(?=\d{10}$)/, '');
+        const pick = u.extension || (/^\d{3,}$/.test(dn) ? dn : '');
+        if (u.status === 'ringing' && pick) {
+          act('Pick up', 'pickup', () => api('/api/pickup', {extension: pick}).catch(()=>{}), 'Answer this call on ' + u.name + "'s behalf");
+        }
+        if (num && registered) {
+          const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
+          dial.title = 'Call ' + u.name; dial.onclick = () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); };
+          acts.appendChild(dial);
+        }
+      }
+      row.append(dot, who, acts);
+      return row;
+  };
+  const buildServiceRow = (sv) => {
+        const num = sv.extension || sv.number || '';
+        const row = document.createElement('div'); row.className = 'contact svc';
+        const who = document.createElement('div');
+        const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = sv.name;
+        const nu = document.createElement('div'); nu.className = 'num'; nu.textContent = (sv.extension ? 'x' + sv.extension : '') + (sv.number && sv.number !== sv.extension ? (sv.extension ? ' · ' : '') + sv.number : '');
+        who.append(nm, nu);
+        const side = document.createElement('div'); side.className = 'side';
+        if (!presenceMode && num) {
+          const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG; dial.title = 'Call ' + sv.name;
+          if (connected()) { dial.title = 'Transfer to ' + sv.name; dial.onclick = () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{}); }
+          else { dial.disabled = !registered; dial.onclick = () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); }; }
+          side.appendChild(dial);
+        }
+        row.append(who, side);
+        return row;
+  };
+  const buildContactRow = (c, i) => {
+      const row = document.createElement('div'); row.className = 'contact';
+      const info = document.createElement('div');
+      const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = c.name;
+      const num = document.createElement('div'); num.className = 'num'; num.textContent = c.number;
+      info.append(nm, num);
+      const side = document.createElement('div'); side.className = 'side';
+      if (i >= 0) { const ed = document.createElement('button'); ed.className = 'edit'; ed.textContent = 'Edit'; ed.onclick = () => openContact(i); side.appendChild(ed); }
+      if (!presenceMode) {
+        const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
+        dial.title = 'Call ' + c.name; dial.setAttribute('aria-label', 'Call ' + c.name);
+        dial.disabled = !registered || inCall();
+        dial.onclick = () => { number.value = c.number; api('/api/call', {number: c.number}).catch(() => {}); };
+        side.appendChild(dial);
+      }
+      row.append(info, side);
+      return row;
+  };
+  let teamSig = '';
+  const renderChips = (users) => {
+    const box = $('team-chips'); box.innerHTML = '';
+    const counts = {}; for (const u of users) counts[u.status] = (counts[u.status] || 0) + 1;
+    for (const [k, label] of FILTERS) {
+      if (!counts[k] && !teamStatuses.has(k)) continue;
+      const b = document.createElement('button'); b.type = 'button'; b.className = teamStatuses.has(k) ? 'on' : ''; b.textContent = label;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = counts[k] || 0; b.appendChild(n);
+      b.setAttribute('aria-pressed', teamStatuses.has(k) ? 'true' : 'false');
+      b.onclick = () => { if (teamStatuses.has(k)) teamStatuses.delete(k); else teamStatuses.add(k); saveFilter(); teamSig = ''; loadTeam(); };
+      box.appendChild(b);
+    }
+    const depts = [...new Set(users.map(u => (u.department || '').trim()).filter(Boolean))].sort();
+    if (depts.length > 1) {
+      const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Department');
+      const o = document.createElement('option'); o.value = ''; o.textContent = 'All departments'; sel.appendChild(o);
+      for (const d of depts) { const op = document.createElement('option'); op.value = d; op.textContent = d; sel.appendChild(op); }
+      sel.value = depts.includes(teamDept) ? teamDept : '';
+      sel.onchange = () => { teamDept = sel.value; saveFilter(); teamSig = ''; loadTeam(); };
+      box.appendChild(sel);
+    }
+    if (teamStatuses.size || teamDept || teamQ) {
+      const r = document.createElement('button'); r.type = 'button'; r.className = 'reset'; r.textContent = 'Reset';
+      r.onclick = () => { teamStatuses.clear(); teamDept = ''; teamQ = ''; $('team-q').value = ''; saveFilter(); teamSig = ''; loadTeam(); };
+      box.appendChild(r);
+    }
+  };
+  $('team-q').value = teamQ;
+  $('team-q').addEventListener('input', () => { teamQ = $('team-q').value.trim().toLowerCase(); $('team-qx').hidden = !teamQ; saveFilter(); teamSig = ''; if (lastTeam) renderTeam(lastTeam); });
+  $('team-qx').addEventListener('click', () => { $('team-q').value = ''; teamQ = ''; $('team-qx').hidden = true; saveFilter(); teamSig = ''; if (lastTeam) renderTeam(lastTeam); $('team-q').focus(); });
+  $('team-q').addEventListener('keydown', e => { if (e.key === 'Escape') { $('team-qx').click(); } });
+  const loadTeam = async () => { const j = await fetchTeam(); if (j) renderTeam(j); };
+  const renderTeam = (j) => {
+    const box = $('team');
+    if (!j.enabled) {
+      $('team-tools').hidden = true;
+      if (presenceMode) { box.innerHTML = ''; const f = document.createElement('div'); f.className = 'team-foot'; f.textContent = 'No presence source yet — open Settings (gear icon) and choose User login (events) or Admin XSI login.'; box.appendChild(f); }
+      return;
+    }
+    $('team-tools').hidden = $('team').hidden;
+    renderChips(j.users);
+    const shown = j.users.filter(u => personMatches(u, teamQ) && (!teamStatuses.size || teamStatuses.has(u.status)) && (!teamDept || (u.department || '').trim() === teamDept));
+    // re-render only when something visible changed (large directories, 1 s polls)
+    const sig = JSON.stringify([teamQ, [...teamStatuses], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, connected(), Object.keys(watchRules),
+      shown.map(u => [u.user_id, u.status, u.with_number, u.with_name, u.stale, u.monitor]), (j.services || []).map(x => x.user_id)]);
+    if (sig === teamSig) { box.querySelectorAll('.dur2[data-since]').forEach(d => { d.textContent = relTime(+d.dataset.since); }); return; }
+    teamSig = sig;
+    box.innerHTML = '';
+    if (!shown.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = j.users.length ? 'No one matches — clear the search or filters.' : 'The directory is empty.'; box.appendChild(e); }
+    // group by department (falls back to a flat list if no departments are set)
+    const ACTIVE = ['on-call','on-hold','ringing','dialing'];
+    const anyDept = shown.some(u => (u.department || '').trim()) && !teamQ;
+    if (anyDept) {
+      const groups = new Map();
+      for (const u of shown) {
+        const d = (u.department || '').trim() || 'No department';
+        if (!groups.has(d)) groups.set(d, []);
+        groups.get(d).push(u);
+      }
+      const names = [...groups.keys()].sort((a,b) =>
+        a === 'No department' ? 1 : b === 'No department' ? -1 : a.localeCompare(b));
+      for (const dept of names) {
+        const members = groups.get(dept);
+        const hdr = document.createElement('div'); hdr.className = 'dept-hdr';
+        const n = document.createElement('span'); n.className = 'dept-name'; n.textContent = dept;
+        hdr.appendChild(n);
+        const activeN = members.filter(m => ACTIVE.includes(m.status)).length;
+        const cnt = document.createElement('span'); cnt.className = 'dept-count';
+        cnt.textContent = activeN ? `${activeN} on a call` : `${members.length}`;
+        hdr.appendChild(cnt);
+        box.appendChild(hdr);
+        for (const u of members) box.appendChild(buildRow(u));
+      }
+    } else {
+      for (const u of shown) box.appendChild(buildRow(u));
+    }
+    // services (hunt groups, queues, ...): speed dials, no presence
+    const svcs = (j.services || []).filter(sv => personMatches(sv, teamQ) && !teamStatuses.size);
+    if (svcs.length) {
+      let lastKind = null;
+      for (const sv of svcs) {
+        if (sv.kind !== lastKind) {
+          lastKind = sv.kind;
+          const hdr = document.createElement('div'); hdr.className = 'dept-hdr svc-hdr';
+          const n = document.createElement('span'); n.className = 'dept-name'; n.textContent = sv.kind_label || 'Services';
+          const cnt = document.createElement('span'); cnt.className = 'dept-count'; cnt.textContent = svcs.filter(x => x.kind === sv.kind).length;
+          hdr.append(n, cnt); box.appendChild(hdr);
+        }
+        box.appendChild(buildServiceRow(sv));
+      }
+    }
+    const foot = document.createElement('div');
+    foot.className = 'team-foot' + (j.last_error ? ' err' : '');
+    foot.textContent = j.last_error ? j.last_error
+      : !j.ready ? (j.source === 'events' ? 'Opening the event channel…' : 'Connecting to the server…')
+      : j.source === 'events' ? (j.connected ? `${j.active} of ${j.total} on a call · live${j.stale ? ' (stale)' : ''}${j.refused ? ' · ' + j.refused + ' not monitored' : ''}` + (j.ack_error ? ' · acknowledgements failing — updates will lag' : '') : 'Reconnecting to the event channel… showing last known state')
+      : `${j.active} of ${j.total} on a call · updated ${relTime(j.last_poll)} ago`;
+    foot.title = j.last_error ? '' : 'Open Settings → Team view → Check for connection details';
+    box.appendChild(foot);
+  };
+  // ---- person details + availability notifications ----
+  const WATCH_EVENTS = [['available', 'becomes available'], ['after-call', 'finishes a call'], ['busy', 'goes on a call'], ['dnd', 'turns on Do Not Disturb'], ['offline', 'goes offline']];
+  let pdUser = null;
+  const loadWatch = async () => { try { watchRules = (await (await fetch('/api/presence/watch')).json()).rules || {}; } catch (e) {} };
+  const openPerson = async (uid, focusWatch) => {
+    let p = null; try { const r = await fetch('/api/presence/person?id=' + encodeURIComponent(uid)); if (r.ok) p = await r.json(); } catch (e) {}
+    if (!p) { p = (lastTeam && lastTeam.users.find(u => u.user_id === uid)) || null; if (!p) return; }
+    pdUser = p;
+    const [cls, label] = STATUS[p.status] || ['', p.status];
+    $('pd-dot').className = 'dot2 ' + cls; $('pd-name').textContent = p.name;
+    const callerId = idNum(p.with_name, p.with_number);
+    $('pd-state').textContent = (p.monitor === 'not-monitored' ? 'Not monitored — your login may not watch this person'
+      : p.monitor === 'error' ? 'Monitoring error: ' + (p.detail || '') : p.monitor === 'none' ? 'Not in the Team view'
+      : label + (callerId && (p.status === 'on-call' || p.status === 'on-hold' || p.status === 'ringing') ? ' · ' + callerId : '') + (p.stale ? ' · stale' : ''));
+    const dl = $('pd-fields'); dl.innerHTML = '';
+    const add = (k, v, muted) => { if (!v && !muted) return; const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v || '—'; if (muted) dd.className = 'muted'; dl.append(dt, dd); };
+    add('Extension', p.extension); add('Number', p.number && p.number !== p.extension ? p.number : ''); add('Mobile', p.mobile);
+    add('Department', p.department); add('Title', p.title); add('Email', p.email); add('Location', p.location); add('Group', p.group);
+    add('Do Not Disturb', p.dnd ? 'On' : 'Off');
+    if (p.registered === false) add('Registered', 'No device registered'); else if (p.registered) add('Registered', 'Yes');
+    add('Last update', p.last_update ? relTime(p.last_update) + ' ago' : (p.monitor === 'ok' ? 'waiting for the first event' : ''), !p.last_update);
+    add('User ID', p.user_id);
+    const rule = watchRules[p.user_id] || {events: []};
+    const opts = $('pd-watch-opts'); opts.innerHTML = '';
+    for (const [k, txt] of WATCH_EVENTS) { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = rule.events.includes(k); const sp = document.createElement('span'); sp.textContent = txt; l.append(c, sp); opts.appendChild(l); }
+    $('pd-watch-sound').checked = rule.sound !== false;
+    const acts = $('pd-acts'); acts.innerHTML = '';
+    const num = p.number || p.extension;
+    if (!presenceMode && num && p.monitor !== 'none') {
+      const mk = (t, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.onclick = () => { fn(); $('pdlg').close(); }; acts.appendChild(b); };
+      if (connected()) { mk('Transfer', () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{})); mk('Conference', () => api('/api/conference', {target: num}).catch(()=>{})); }
+      else if (registered) mk('Call', () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); });
+    }
+    $('pdlg').showModal();
+    if (focusWatch) { const f = opts.querySelector('input'); if (f) f.focus(); }
+  };
+  $('pdlg').addEventListener('close', async () => {
+    if (!pdUser) return;
+    const events = [...$('pd-watch-opts').querySelectorAll('input:checked')].map(c => c.value);
+    const had = (watchRules[pdUser.user_id] || {events: []}).events;
+    if (events.join() === had.join() && (!events.length || $('pd-watch-sound').checked === (watchRules[pdUser.user_id].sound !== false))) return;
+    try { const r = await api('/api/presence/watch', {user_id: pdUser.user_id, name: pdUser.name, events, sound: $('pd-watch-sound').checked, once: true}); watchRules = r.rules || {}; teamSig = ''; if (lastTeam) renderTeam(lastTeam); } catch (e) {}
+    if (events.length && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  });
+  loadWatch();
+  // toasts for availability notifications (+ optional sound, desktop notification when permitted)
+  let lastNotifyId = 0;
+  const beep = () => { try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value = 880; g.gain.value = 0.08; o.start(); o.frequency.setValueAtTime(1175, ac.currentTime + 0.12); o.stop(ac.currentTime + 0.25); } catch (e) {} };
+  const showNotifications = (list) => {
+    for (const n of list || []) {
+      if (n.id <= lastNotifyId) continue; lastNotifyId = n.id;
+      const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = '<b></b> '; t.querySelector('b').textContent = n.name; t.appendChild(document.createTextNode(n.text.replace(n.name, '').trim()));
+      $('toasts').appendChild(t); setTimeout(() => t.remove(), 8000);
+      if (n.sound !== false) beep();
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) { try { new Notification('SIP Phone', {body: n.text}); } catch (e) {} }
+      watchRules = Object.fromEntries(Object.entries(watchRules).filter(([k]) => k !== n.user_id || (watchRules[k].events || []).length > 1)); teamSig = '';
+    }
+  };
+  // ---- boards: custom tabs mixing teammates and contacts; pinned built-in tabs ----
+  let boardsData = {hidden: [], boards: []}, curTab = 'contacts';
+  const boardOf = id => boardsData.boards.find(b => b.id === id);
+  const renderTabs = () => {
+    const bar = $('tabs');
+    bar.querySelectorAll('.tab-board').forEach(b => b.remove());
+    const hidden = new Set(boardsData.hidden);
+    $('tab-team').hidden = hidden.has('team') || !teamAvailable();
+    $('tab-contacts').hidden = hidden.has('contacts');
+    $('tab-recent').hidden = hidden.has('recent');
+    const edit = $('tab-edit');
+    for (const b of boardsData.boards) {
+      const t = document.createElement('button'); t.className = 'tab-board' + (curTab === 'board:' + b.id ? ' on' : '');
+      t.textContent = b.name; t.dataset.board = b.id; t.onclick = () => showTab('board:' + b.id);
+      bar.insertBefore(t, edit);
+    }
+  };
+  const teamAvailable = () => (lastState && lastState.has_monitor) || presenceMode;
+  const visibleTabs = () => {
+    const hidden = new Set(boardsData.hidden), out = [];
+    if (teamAvailable() && !hidden.has('team')) out.push('team');
+    if (!presenceMode && !hidden.has('contacts')) out.push('contacts');
+    if (!presenceMode && !hidden.has('recent')) out.push('recent');
+    for (const b of boardsData.boards) out.push('board:' + b.id);
+    return out;
+  };
+  const renderBoard = () => {
+    const b = boardOf(curTab.slice(6)), box = $('board'); if (!b) return;
+    box.innerHTML = '';
+    const j = lastTeam && lastTeam.enabled ? lastTeam : null;
+    const team = new Map((j ? j.users : []).map(u => [u.user_id, u]));
+    const svcs = new Map((j ? (j.services || []) : []).map(u => [u.user_id, u]));
+    const byNum = new Map(contacts.map((c, i) => [c.number, i]));
+    const groups = [['team', 'Team'], ['service', 'Services'], ['contact', 'Contacts']];
+    for (const [kind, label] of groups) {
+      const members = b.members.filter(m => m.type === kind);
+      if (!members.length) continue;
+      if (b.members.some(m => m.type !== kind)) {
+        const hdr = document.createElement('div'); hdr.className = 'dept-hdr';
+        const n = document.createElement('span'); n.className = 'dept-name'; n.textContent = label;
+        const cnt = document.createElement('span'); cnt.className = 'dept-count';
+        cnt.textContent = kind === 'team' ? (members.filter(m => ['on-call','on-hold','ringing','dialing'].includes((team.get(m.id) || {}).status)).length || members.length) : members.length;
+        hdr.append(n, cnt); box.appendChild(hdr);
+      }
+      for (const m of members) {
+        if (kind === 'team') {
+          const u = team.get(m.id);
+          if (u) box.appendChild(buildRow(u));
+          else { const r = buildRow({user_id: m.id, name: m.id.split('@')[0], status: 'unknown'}); r.classList.add('missing'); r.querySelector('.st2').textContent = j ? 'Not in your Team view' : 'Team view off'; box.appendChild(r); }
+        } else if (kind === 'service') {
+          const sv = svcs.get(m.id);
+          if (sv) box.appendChild(buildServiceRow(sv));
+          else { const r = buildServiceRow({user_id: m.id, name: m.id.split('@')[0], extension: ''}); r.classList.add('missing'); box.appendChild(r); }
+        } else {
+          const i = byNum.has(m.id) ? byNum.get(m.id) : -1;
+          box.appendChild(buildContactRow(i >= 0 ? contacts[i] : {name: m.id, number: m.id}, i));
+        }
+      }
+    }
+    if (!b.members.length) { const f = document.createElement('div'); f.className = 'team-foot'; f.textContent = 'This board is empty — use ⋯ to add teammates and contacts.'; box.appendChild(f); }
+  };
+  const loadBoard = async () => { if (boardOf(curTab.slice(6)) && boardOf(curTab.slice(6)).members.some(m => m.type !== 'contact')) await fetchTeam(); renderBoard(); };
+  const showTab = which => {
+    if (which.startsWith('board:') && !boardOf(which.slice(6))) which = visibleTabs()[0] || 'contacts';
+    curTab = which;
+    teamTab = which === 'team';
+    for (const [id, name] of [['tab-contacts','contacts'],['tab-recent','recent'],['tab-team','team']]) {
+      $(id).className = which === name ? 'on' : '';
+      $(name).hidden = which !== name;
+    }
+    $('board').hidden = !which.startsWith('board:');
+    $('team-tools').hidden = which !== 'team' || !(lastTeam && lastTeam.enabled);
+    if (which === 'team') teamSig = '';
+    $('tabs').querySelectorAll('.tab-board').forEach(t => t.className = 'tab-board' + (which === 'board:' + t.dataset.board ? ' on' : ''));
+    $('btn-addcontact').style.visibility = which === 'contacts' ? 'visible' : 'hidden';
+    if (which === 'recent') loadRecent();
+    if (which === 'team') loadTeam();
+    if (which.startsWith('board:')) loadBoard();
+    if (teamTimer) { clearInterval(teamTimer); teamTimer = null; }
+    if (which === 'team') teamTimer = setInterval(loadTeam, 1000);
+    if (which.startsWith('board:')) teamTimer = setInterval(loadBoard, 1000);
+    try { localStorage.setItem('sipphone.tab', which); } catch (e) {}
+  };
+  $('tab-contacts').onclick = () => showTab('contacts');
+  $('tab-recent').onclick = () => showTab('recent');
+  // tabs editor
+  let editingBoard = -1, draft = null;
+  const renderBoardList = () => {
+    const list = $('board-list'); list.innerHTML = '';
+    draft.boards.forEach((b, i) => {
+      const r = document.createElement('div'); r.className = 'brow';
+      const n = document.createElement('span'); n.textContent = b.name;
+      const sm = document.createElement('small'); sm.textContent = b.members.length + (b.members.length === 1 ? ' entry' : ' entries'); n.appendChild(sm);
+      const e = document.createElement('button'); e.type = 'button'; e.textContent = 'Edit'; e.onclick = () => openBoard(i);
+      r.append(n, e); list.appendChild(r);
+    });
+  };
+  $('tab-edit').onclick = () => {
+    draft = JSON.parse(JSON.stringify(boardsData));
+    const hidden = new Set(draft.hidden);
+    for (const t of ['team','contacts','recent']) $('pin-' + t).checked = !hidden.has(t);
+    renderBoardList(); $('xdlg').showModal();
+  };
+  $('board-new').onclick = () => openBoard(-1);
+  const pick = (box, items, chosen) => {
+    box.innerHTML = '';
+    for (const it of items) {
+      const l = document.createElement('label'); l.className = 'check';
+      const c = document.createElement('input'); c.type = 'checkbox'; c.checked = chosen.has(it.type + ':' + it.id); c.dataset.type = it.type; c.dataset.id = it.id;
+      const sp = document.createElement('span'); sp.textContent = it.name;
+      if (it.sub) { const sm = document.createElement('small'); sm.textContent = it.sub; sp.appendChild(sm); }
+      l.append(c, sp); box.appendChild(l);
+    }
+  };
+  const openBoard = async i => {
+    editingBoard = i;
+    const b = i < 0 ? {name: '', members: []} : draft.boards[i];
+    $('bdlg-title').textContent = i < 0 ? 'New board' : 'Edit board';
+    $('bname').value = b.name;
+    $('bdlg-delete').style.visibility = i < 0 ? 'hidden' : 'visible';
+    const chosen = new Set(b.members.map(m => m.type + ':' + m.id));
+    const j = await fetchTeam();
+    const people = j && j.enabled ? j.users.map(u => ({type: 'team', id: u.user_id, name: u.name, sub: u.extension ? 'x' + u.extension : ''})) : [];
+    const svcs = j && j.enabled ? (j.services || []).map(u => ({type: 'service', id: u.user_id, name: u.name, sub: (u.kind_label || '').toLowerCase()})) : [];
+    // keep members that are no longer listed so they aren't silently dropped
+    for (const m of b.members) if (m.type !== 'contact' && !people.concat(svcs).some(p => p.type === m.type && p.id === m.id)) (m.type === 'team' ? people : svcs).push({type: m.type, id: m.id, name: m.id.split('@')[0], sub: 'not in Team view'});
+    pick($('bpick-team'), people.concat(svcs), chosen);
+    pick($('bpick-contacts'), contacts.map(c => ({type: 'contact', id: c.number, name: c.name, sub: c.number !== c.name ? c.number : ''})), chosen);
+    $('bdlg').showModal(); $('bname').focus();
+  };
+  $('bdlg').addEventListener('close', () => {
+    const v = $('bdlg').returnValue;
+    if (v === 'save') {
+      const name = $('bname').value.trim(); if (!name) return;
+      const members = [...$('bdlg').querySelectorAll('input[type=checkbox]:checked')].map(c => ({type: c.dataset.type, id: c.dataset.id}));
+      const b = {id: editingBoard < 0 ? 'b' + Date.now() : draft.boards[editingBoard].id, name, members};
+      if (editingBoard < 0) draft.boards.push(b); else draft.boards[editingBoard] = b;
+    } else if (v === 'delete' && editingBoard >= 0) draft.boards.splice(editingBoard, 1);
+    else return;
+    renderBoardList();
+  });
+  $('xdlg').addEventListener('close', () => {
+    if ($('xdlg').returnValue !== 'save' || !draft) return;
+    draft.hidden = ['team','contacts','recent'].filter(t => !$('pin-' + t).checked);
+    api('/api/boards', draft).then(j => { boardsData = j; renderTabs(); if (!visibleTabs().includes(curTab)) showTab(visibleTabs()[0] || 'contacts'); else if (curTab.startsWith('board:')) renderBoard(); })
+      .catch(e => alert(e.message || 'Could not save the tabs'));
+  });
+  fetch('/api/boards').then(r => r.json()).then(j => { boardsData = j; renderTabs();
+    let want = ''; try { want = localStorage.getItem('sipphone.tab') || ''; } catch (e) {}
+    if (want && visibleTabs().includes(want) && want !== 'team') showTab(want);
+    else if (!visibleTabs().includes(curTab)) showTab(visibleTabs()[0] || 'contacts'); });
+  $('tab-team').onclick = () => showTab('team');
+  // live-tick the durations between polls
+  setInterval(() => { if (teamTab) document.querySelectorAll('#team .dur2').forEach(d => { d.textContent = relTime(+d.dataset.since); }); }, 1000);
+
+
+  // ---- settings ----
+  const sdlg = $('sdlg');
+  let sData = null, setupShown = false, restartPending = false, awaitingReg = 0;
+  const sFields = () => [...sdlg.querySelectorAll('[data-k]')];
+  const sMsg = (t, cls) => { $('s-msg').textContent = t || ''; $('s-msg').className = 's-msg' + (cls ? ' ' + cls : ''); };
+  const fillSelect = (sel, opts, value) => {
+    sel.innerHTML = '';
+    if (value && !opts.some(o => o.value === value)) opts = opts.concat([{value, label: value + ' (saved)'}]);
+    for (const o of opts) {
+      const op = document.createElement('option'); op.value = o.value; op.textContent = o.label;
+      if (o.disabled) op.disabled = true;
+      sel.appendChild(op);
+    }
+    sel.value = value || '';
+  };
+  const showRestart = list => {
+    restartPending = !!(list && list.length);
+    const can = sData && sData.can_restart;
+    $('s-restart').hidden = !restartPending;
+    $('s-restart-btn').hidden = !can;
+    $('s-restart-text').textContent = can ? 'Restart the phone to apply the new voice, audio or port settings.'
+                                          : 'Close and reopen the phone to apply the new voice, audio or port settings.';
+  };
+  const loadSettings = async () => {
+    const r = await fetch('/api/settings', {cache: 'no-store'});
+    sData = await r.json();
+    if (sData.error) throw new Error(sData.error);
+    const v = sData.values, f = sData.features;
+    for (const el of sFields()) {
+      const [sec, key] = el.dataset.k.split('.');
+      const val = (v[sec] || {})[key] ?? '';
+      if (el.type === 'radio') continue;
+      if (el.type === 'checkbox') el.checked = !/^(false|no|0)$/i.test(val);
+      else if (el.tagName === 'SELECT') continue;
+      else el.value = el.type === 'password' ? '' : val;
+    }
+    for (const k of ['account.password', 'admin.password', 'presence.xsi_password']) {
+      const set = sData.secrets_set[k];
+      sdlg.querySelector(`[data-k="${k}"]`).placeholder = set ? '•••••••• saved' : (k === 'account.password' ? 'Required' : '');
+      sdlg.querySelector(`[data-hint="${k}"]`).textContent = set ? 'Leave blank to keep the saved password.' : '';
+    }
+    sdlg.querySelector('[data-k="presence.mode"]').value = v.presence.mode === 'blf' ? 'events' : (v.presence.mode || '');
+    // service categories (admin source): checkboxes backed by the hidden comma-list field
+    const svcBox = $('s-svc'), svcIn = sdlg.querySelector('[data-k="admin.show_services"]');
+    const chosen = new Set((svcIn.value || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
+    svcBox.innerHTML = '';
+    for (const t of (sData.service_types || [])) {
+      const l = document.createElement('label'); l.className = 'check';
+      const c = document.createElement('input'); c.type = 'checkbox'; c.checked = chosen.has(t.key); c.dataset.svc = t.key;
+      c.onchange = () => { svcIn.value = [...svcBox.querySelectorAll('input:checked')].map(x => x.dataset.svc).join(', '); };
+      const sp = document.createElement('span'); sp.textContent = t.label; l.append(c, sp); svcBox.appendChild(l);
+    }
+    sdlg.querySelectorAll('input[name="appmode"]').forEach(r => { r.checked = r.value === (v.app.mode || 'phone'); });
+    applyMode();
+    renderUpdates();
+    renderVoiceSummary();
+    const devs = d => [{value: '', label: 'System default'}].concat(d.map(x => ({value: x.value, label: x.name})));
+    fillSelect(sdlg.querySelector('[data-k="audio.input_device"]'), devs(sData.devices.input), v.audio.input_device);
+    fillSelect(sdlg.querySelector('[data-k="audio.output_device"]'), devs(sData.devices.output), v.audio.output_device);
+    $('s-audio-hint').textContent = f.sounddevice ? 'Takes effect after a restart.' : 'No audio library found, so devices can’t be listed.';
+    $('s-welcome').hidden = !sData.needs_setup;
+    fetch('/api/extension', {cache: 'no-store'}).then(r => r.json()).then(x => {
+      $('s-ext-folder').textContent = x.folder || ''; $('s-ext-zip').download = x.zip_name || '';
+      const b = x.bridge || {}, el = $('s-bridge');
+      el.className = b.registered ? 'ok' : 'bad';
+      el.textContent = b.registered ? 'Browser link: ready (the extension can reach this app).'
+        : !b.exe_ok ? 'Browser link: the bridge program is missing — reinstall SIP Phone.'
+        : b.can_register ? 'Browser link: not registered yet.' : 'Browser link: needs Install.bat once (this Python can\u2019t write the registry).';
+      $('s-bridge-fix').hidden = b.registered || !b.can_register || !b.exe_ok;
+    }).catch(() => {});
+    showRestart(sData.restart_pending);
+    $('s-test-msg').textContent = ''; $('s-test-msg').className = '';
+  };
+
+  // ---- voice engine --------------------------------------------------------------
+  let vData = null, vModels = null, vTimer = null;
+  const STATE_TXT = {available: 'Available', 'not-configured': 'Not configured', 'model-required': 'Model required', unavailable: 'Unavailable', off: 'Off'};
+  const vFetch = async () => { try { vData = await (await fetch('/api/voice', {cache: 'no-store'})).json(); } catch (e) { vData = null; } return vData; };
+  const vPost = (path, body) => api('/api/voice/' + path, body);
+  const provById = id => (vData && vData.providers.find(p => p.id === id)) || null;
+  const renderVoiceSummary = async () => {
+    const d = await vFetch(); if (!d || !d.enabled) { for (const k of ['tts','stt','vn']) { $('feat-' + k + '-state').textContent = 'Off'; $('feat-' + k + '-state').className = 'feat-state off'; } return; }
+    const tts = provById(d.defaults.tts), stt = provById(d.defaults.stt), vn = provById((d.defaults.assignments || {}).notifications) || tts;
+    const setFeat = (k, p, offText, onText) => {
+      const st = !p ? 'off' : p.availability.state;
+      $('feat-' + k + '-state').textContent = STATE_TXT[st] || st; $('feat-' + k + '-state').className = 'feat-state ' + st;
+      $('feat-' + k + '-desc').textContent = !p ? offText : (st === 'available' ? onText(p) : p.availability.reason + (p.availability.action ? ' ' + p.availability.action : ''));
+    };
+    setFeat('tts', tts, 'No provider chosen. Add one below — the system voice needs no download.', p => `${p.name}${d.defaults.voice ? ' · ' + d.defaults.voice : ''} — type during a call and the caller hears it.`);
+    setFeat('stt', stt, 'No recognizer chosen. Faster-Whisper downloads its model on first use.', p => `${p.name} — shows what the caller says as text.`);
+    setFeat('vn', vn, 'Choose a text-to-speech provider first.', p => `Spoken by ${p.name}.`);
+  };
+  $('s-voice-open').onclick = async () => { await vFetch(); renderVoice(); $('vdlg').showModal(); vTimer = setInterval(async () => { if (document.querySelector('#v-models progress')) await renderModels(); }, 1500); };
+  $('vdlg').addEventListener('close', () => { clearInterval(vTimer); vTimer = null; renderVoiceSummary(); });
+  const optsFor = (list, blankLabel) => [{value: '', label: blankLabel}].concat(list.map(p => ({value: p.id, label: p.name + (p.availability.state === 'available' ? '' : ' — ' + (STATE_TXT[p.availability.state] || '').toLowerCase())})));
+  const renderDefaults = () => {
+    const d = vData.defaults, tts = vData.providers.filter(p => !p.stt), stt = vData.providers.filter(p => p.stt);
+    fillSelect($('v-tts'), optsFor(tts, 'Off'), d.tts);
+    fillSelect($('v-fallback'), optsFor(tts, 'None'), d.tts_fallback);
+    fillSelect($('v-notify'), optsFor(tts, 'Same as text-to-speech'), (d.assignments || {}).notifications || '');
+    fillSelect($('v-stt'), optsFor(stt, 'Off'), d.stt);
+    const p = provById($('v-tts').value);
+    const voices = p ? p.voices : [];
+    fillSelect($('v-voice'), [{value: '', label: p ? 'Provider default' : '—'}].concat(voices.map(v => ({value: v.id, label: v.name + (v.language ? ' (' + v.language + ')' : '')}))), d.voice);
+    $('v-voice-hint').textContent = p && !voices.length ? (p.availability.state === 'available' ? 'This provider lists no voices.' : (p.availability.reason + ' ' + (p.availability.action || ''))) : (p && !p.capabilities.rate ? 'This provider ignores the speaking rate.' : '');
+    $('v-rate').value = d.rate; $('v-rate-out').textContent = (+d.rate).toFixed(2).replace(/0$/, '') + '×';
+    $('v-volume').value = d.volume; $('v-volume-out').textContent = Math.round(d.volume * 100) + '%';
+  };
+  const saveDefaults = async () => {
+    const body = {tts: $('v-tts').value, tts_fallback: $('v-fallback').value, stt: $('v-stt').value, voice: $('v-voice').value, rate: +$('v-rate').value, volume: +$('v-volume').value,
+                  assignments: Object.assign({}, vData.defaults.assignments || {}, {notifications: $('v-notify').value})};
+    if (!body.assignments.notifications) delete body.assignments.notifications;
+    try { vData = await vPost('defaults', body); } catch (e) { $('v-test-msg').textContent = e.message; $('v-test-msg').className = 'v-msg bad'; }
+    renderDefaults(); renderProviders();
+  };
+  for (const id of ['v-tts','v-fallback','v-notify','v-stt','v-voice']) $(id).onchange = () => { if (id === 'v-tts') $('v-voice').value = ''; saveDefaults(); };
+  $('v-rate').oninput = () => { $('v-rate-out').textContent = (+$('v-rate').value).toFixed(2).replace(/0$/, '') + '×'; };
+  $('v-volume').oninput = () => { $('v-volume-out').textContent = Math.round($('v-volume').value * 100) + '%'; };
+  $('v-rate').onchange = $('v-volume').onchange = saveDefaults;
+  let vAudio = null;
+  const testVoice = async (provider, voice, btn) => {
+    const msg = $('v-test-msg'); msg.textContent = 'Generating…'; msg.className = 'v-msg';
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/api/voice/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({provider, voice, text: $('v-test-text').value.trim(), rate: +$('v-rate').value, volume: +$('v-volume').value})});
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'HTTP ' + r.status); }
+      const blob = await r.blob();
+      if (vAudio) { try { vAudio.pause(); } catch (e) {} }
+      vAudio = new Audio(URL.createObjectURL(blob)); await vAudio.play();
+      msg.textContent = 'Playing through this browser.'; msg.className = 'v-msg ok';
+    } catch (e) { msg.textContent = e.message; msg.className = 'v-msg bad'; }
+    if (btn) btn.disabled = false;
+  };
+  $('v-test').onclick = () => testVoice($('v-tts').value, $('v-voice').value, $('v-test'));
+  const fieldInput = (f, value, idPrefix) => {
+    const l = document.createElement('label'); l.className = 's-field';
+    const sp = document.createElement('span'); sp.textContent = f.label; l.appendChild(sp);
+    let el;
+    if (f.kind === 'select') { el = document.createElement('select'); for (const o of f.options || []) { const op = document.createElement('option'); op.value = o; op.textContent = o; el.appendChild(op); } el.value = value ?? f.default ?? ''; }
+    else { el = document.createElement('input'); el.type = f.kind === 'secret' ? 'password' : f.kind === 'number' ? 'number' : 'text'; el.spellcheck = false; el.autocomplete = f.kind === 'secret' ? 'new-password' : 'off';
+      el.value = f.kind === 'secret' ? '' : (value ?? f.default ?? ''); if (f.kind === 'secret' && value === '' && idPrefix === 'cfg') el.placeholder = 'Saved — leave blank to keep'; }
+    el.dataset.key = f.key; l.appendChild(el);
+    if (f.help) { const sm = document.createElement('small'); sm.textContent = f.help; l.appendChild(sm); }
+    return l;
+  };
+  const renderProviders = () => {
+    const box = $('v-providers'); box.innerHTML = '';
+    if (!vData.providers.length) { box.innerHTML = '<div class="v-why">No providers yet. Add one below.</div>'; return; }
+    for (const p of vData.providers) {
+      const c = document.createElement('div'); c.className = 'v-card';
+      const top = document.createElement('div'); top.className = 'v-top';
+      const nm = document.createElement('div'); nm.className = 'v-name'; nm.textContent = p.name;
+      const sm = document.createElement('small'); sm.textContent = p.title + (p.version ? ' ' + p.version : '') + ' · ' + ({local: 'on this computer', remote: 'remote', native: 'system'}[p.kind] || p.kind) + (p.stt ? ' · speech-to-text' : ''); nm.appendChild(sm);
+      const right = document.createElement('div');
+      const st = document.createElement('span'); st.className = 'feat-state ' + (p.enabled ? p.availability.state : 'off'); st.textContent = p.enabled ? (STATE_TXT[p.availability.state] || p.availability.state) : 'Disabled'; right.appendChild(st);
+      if (p.is_default) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Default'; b.style.marginLeft = '6px'; right.appendChild(b); }
+      else if (p.is_fallback) { const b = document.createElement('span'); b.className = 'badge off'; b.textContent = 'Fallback'; b.style.marginLeft = '6px'; right.appendChild(b); }
+      top.append(nm, right); c.appendChild(top);
+      if (!p.availability.ok && p.enabled) { const w = document.createElement('div'); w.className = 'v-why bad'; w.textContent = p.availability.reason + (p.availability.action ? ' → ' + p.availability.action : ''); c.appendChild(w); }
+      else if (p.voices && p.voices.length) { const w = document.createElement('div'); w.className = 'v-why'; w.textContent = p.voices.length + (p.voices.length === 1 ? ' voice' : ' voices') + (p.loaded ? ' · loaded' : ''); c.appendChild(w); }
+      const acts = document.createElement('div'); acts.className = 'v-acts';
+      const mk = (t, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; acts.appendChild(b); return b; };
+      if (!p.stt && p.availability.ok && p.enabled) mk('Test', b => testVoice(p.id, '', b));
+      if (!p.is_default && p.enabled) mk(p.stt ? 'Use for transcript' : 'Make default', async () => { vData = await vPost('defaults', p.stt ? {stt: p.id} : {tts: p.id, voice: ''}); renderDefaults(); renderProviders(); }, 'primary');
+      mk('Configure', () => { const cfg = c.querySelector('.v-cfg'); cfg.hidden = !cfg.hidden; });
+      mk(p.enabled ? 'Disable' : 'Enable', async () => { vData = await vPost('providers/update', {id: p.id, enabled: !p.enabled}); renderDefaults(); renderProviders(); });
+      mk('Remove', async () => { if (!confirm('Remove ' + p.name + '? The softphone keeps working with the remaining providers.')) return; vData = await vPost('providers/remove', {id: p.id}); renderDefaults(); renderProviders(); }, 'danger');
+      c.appendChild(acts);
+      const cfg = document.createElement('div'); cfg.className = 'v-cfg'; cfg.hidden = true;
+      const type = vData.types.find(t => t.type === p.type) || {fields: []};
+      const nameF = fieldInput({key: '__name', label: 'Name', kind: 'text'}, p.name, 'cfg'); cfg.appendChild(nameF);
+      for (const f of type.fields) {
+        if (f.kind === 'voice') { const vf = Object.assign({}, f, {kind: 'select', options: [''].concat(p.voices.map(v => v.id))}); cfg.appendChild(fieldInput(vf, p.config[f.key] || '', 'cfg')); }
+        else cfg.appendChild(fieldInput(f, p.config[f.key], 'cfg'));
+      }
+      const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Save'; save.className = 'primary'; save.style.marginTop = '6px';
+      save.onclick = async () => { const config = {}; let name = p.name; cfg.querySelectorAll('[data-key]').forEach(el => { if (el.dataset.key === '__name') name = el.value.trim() || p.name; else config[el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value; });
+        try { vData = await vPost('providers/update', {id: p.id, name, config}); renderDefaults(); renderProviders(); } catch (e) { alert(e.message); } };
+      cfg.appendChild(save); c.appendChild(cfg);
+      box.appendChild(c);
+    }
+  };
+  const renderAdd = () => {
+    const sel = $('v-add-type');
+    if (!sel.options.length) {
+      const groups = [['Text-to-speech', vData.types.filter(t => !t.stt)], ['Speech-to-text', vData.types.filter(t => t.stt)]];
+      for (const [label, list] of groups) { const g = document.createElement('optgroup'); g.label = label; for (const t of list) { const o = document.createElement('option'); o.value = t.type; o.textContent = t.title; g.appendChild(o); } sel.appendChild(g); }
+      sel.onchange = renderAdd;
+    }
+    const t = vData.types.find(x => x.type === sel.value); if (!t) return;
+    $('v-add-desc').textContent = t.description + (t.pip ? ` Package: pip install ${t.pip}.` : '');
+    const box = $('v-add-fields'); box.innerHTML = '';
+    for (const f of t.fields) if (f.kind !== 'voice') box.appendChild(fieldInput(f, undefined, 'add'));
+    $('v-add-name').placeholder = t.title;
+  };
+  $('v-add').onclick = async () => {
+    const type = $('v-add-type').value, config = {};
+    $('v-add-fields').querySelectorAll('[data-key]').forEach(el => { config[el.dataset.key] = el.value; });
+    const msg = $('v-add-msg');
+    try { vData = await vPost('providers/add', {type, name: $('v-add-name').value.trim(), config, make_default: $('v-add-default').checked}); msg.textContent = 'Added.'; msg.className = 'v-msg ok'; $('v-add-name').value = ''; renderDefaults(); renderProviders(); renderAdd(); }
+    catch (e) { msg.textContent = e.message; msg.className = 'v-msg bad'; }
+  };
+  const renderModels = async () => {
+    try { vModels = await (await fetch('/api/voice/models', {cache: 'no-store'})).json(); } catch (e) { return; }
+    $('v-models-dir').value = vModels.models_dir || '';
+    const box = $('v-models'); box.innerHTML = '';
+    for (const m of vModels.catalog) {
+      const c = document.createElement('div'); c.className = 'v-card';
+      const top = document.createElement('div'); top.className = 'v-top';
+      const nm = document.createElement('div'); nm.className = 'v-name'; nm.textContent = m.title; const sm = document.createElement('small'); sm.textContent = `${m.size_mb} MB · ${m.provider}`; nm.appendChild(sm);
+      const st = document.createElement('span'); st.className = 'feat-state ' + (m.installed ? 'available' : m.pip_installed ? 'model-required' : 'unavailable');
+      st.textContent = m.installed ? 'Installed' : m.managed ? 'Auto-download' : m.pip_installed ? 'Not downloaded' : 'Package missing';
+      top.append(nm, st); c.appendChild(top);
+      const why = document.createElement('div'); why.className = 'v-why'; why.textContent = `License: ${m.license}. ${m.requirements}.` + (m.notes ? ' ' + m.notes : '') + (m.local ? ' Runs locally.' : ' Remote.'); c.appendChild(why);
+      const job = m.job;
+      if (job && job.state === 'downloading') { const pr = document.createElement('progress'); pr.max = 1; pr.value = job.progress; c.appendChild(pr); const t = document.createElement('div'); t.className = 'v-why'; t.textContent = `Downloading… ${(job.bytes / 1e6).toFixed(1)} MB`; c.appendChild(t); }
+      if (job && job.state === 'error') { const t = document.createElement('div'); t.className = 'v-why bad'; t.textContent = 'Download failed: ' + job.error; c.appendChild(t); }
+      const acts = document.createElement('div'); acts.className = 'v-acts';
+      const mk = (t, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; acts.appendChild(b); };
+      if (!m.installed && !m.managed && !(job && job.state === 'downloading')) mk('Download', async () => { try { await vPost('models/download', {id: m.id}); } catch (e) { alert(e.message); } renderModels(); }, 'primary');
+      if (m.installed) { mk('Verify', async () => { const r = await vPost('models/verify', {id: m.id}); alert(Object.entries(r).map(([k, v]) => k + ': ' + (v.missing ? 'missing' : v.size + ' bytes, sha256 ' + v.sha256.slice(0, 12) + '…')).join('\n')); });
+        mk('Remove', async () => { if (confirm('Remove ' + m.title + ' from disk?')) { await vPost('models/remove', {id: m.id}); renderModels(); await vFetch(); renderDefaults(); renderProviders(); } }, 'danger'); }
+      if (!m.pip_installed && !m.installed) { const t = document.createElement('div'); t.className = 'v-why bad'; t.textContent = `Install the package first: pip install ${{piper: 'piper-tts', kokoro: 'kokoro-onnx soundfile', vosk: 'vosk', 'faster-whisper': 'faster-whisper'}[m.provider] || m.provider}`; c.appendChild(t); }
+      c.appendChild(acts); box.appendChild(c);
+    }
+    $('v-custom').textContent = vModels.custom && vModels.custom.length ? 'Your own files in the models folder: ' + vModels.custom.map(f => `${f.path} (${f.size_mb} MB)`).join(', ') : 'Drop your own Piper-compatible .onnx (+ .onnx.json) voices into the models folder and they appear under the Piper provider.';
+  };
+  $('v-models-dir-set').onclick = async () => { const path = prompt('Models folder', $('v-models-dir').value); if (!path) return; try { await vPost('models/dir', {path}); } catch (e) { alert(e.message); } await renderModels(); await vFetch(); renderProviders(); };
+  const renderVoice = () => { if (!vData || !vData.enabled) return; renderDefaults(); renderProviders(); renderAdd(); renderModels(); };
+  const collect = () => {
+    const out = {};
+    for (const el of sFields()) {
+      const [sec, key] = el.dataset.k.split('.');
+      if (el.type === 'radio') continue;
+      (out[sec] = out[sec] || {})[key] = el.type === 'checkbox' ? el.checked : el.value;
+    }
+    (out.app = out.app || {}).mode = (appModeEl() || {}).value || 'phone';
+    return out;
+  };
+  const MODE_HINT = {events: 'Live, with Do Not Disturb, using only your own login. Everyone in the company directory the phone system lets you watch.',
+                     admin: 'Live events with an Admin XSI login: the whole enterprise, with Do Not Disturb and Offline. The admin password stays in this app.',
+                     '': 'The Team tab is hidden.'};
+  const appModeEl = () => sdlg.querySelector('input[name="appmode"]:checked');
+  const applyMode = () => {
+    const app = (appModeEl() || {}).value || 'phone';
+    const m = sdlg.querySelector('[data-k="presence.mode"]').value;
+    const key = app === 'presence' ? 'presence' : 'phone';
+    sdlg.querySelectorAll('[data-app]').forEach(el => { el.hidden = !el.dataset.app.split(' ').includes(key); });
+    sdlg.querySelectorAll('[data-mode]').forEach(el => { el.hidden = !el.dataset.mode.split(' ').includes(m); });
+    $('s-mode-hint').textContent = (app === 'presence' && !m) ? 'Team view only needs a presence source.' : (MODE_HINT[m] || '');
+    $('s-test').textContent = m === 'events' ? 'Check' : 'Test connection';
+    $('s-mode-restart').hidden = !(sData && sData.started_mode === 'presence' && app === 'phone');
+  };
+  sdlg.querySelector('[data-k="presence.mode"]').addEventListener('change', () => { applyMode(); $('s-test-msg').textContent = ''; });
+  sdlg.querySelectorAll('input[name="appmode"]').forEach(r => r.addEventListener('change', () => {
+    const sel = sdlg.querySelector('[data-k="presence.mode"]');
+    if (r.value === 'presence' && !sel.value) sel.value = 'events';
+    applyMode();
+  }));
+  const openSettings = async () => {
+    sMsg('');
+    try { await loadSettings(); } catch (e) { showErr('Settings unavailable: ' + e.message); return; }
+    if (!sdlg.open) sdlg.showModal();
+    const first = sData.needs_setup && sData.mode !== 'presence' ? sdlg.querySelector('[data-k="account.username"]') : $('s-close');
+    if (sData.needs_setup && first.value === '1234567890') first.select(); else first.focus();
+  };
+  $('btn-settings').onclick = openSettings;
+  $('s-close').onclick = $('s-cancel').onclick = () => sdlg.close();
+  $('s-save').onclick = async () => {
+    const btn = $('s-save'); btn.disabled = true; sMsg('Saving…');
+    try {
+      const r = await fetch('/api/settings', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                              body: JSON.stringify({values: collect()})});
+      const j = await r.json();
+      if (j.error) { sMsg(j.error, 'bad'); return; }
+      const bits = [];
+      if (!j.changed.length) bits.push('Nothing changed.');
+      else bits.push('Saved.');
+      if (j.applied.includes('account')) { bits.push('Registering with the new account…'); awaitingReg = Date.now(); }
+      if (j.applied.includes('mode')) bits.push(collect().app.mode === 'presence' ? 'Now Team view only.' : 'Phone mode on.');
+      if (j.applied.includes('team')) bits.push(j.monitor_error ? 'Team view error: ' + j.monitor_error : 'Team view updated.');
+      if (j.applied.includes('startup')) bits.push('Startup setting saved.');
+      sMsg(bits.join(' '), j.monitor_error ? 'bad' : 'ok');
+      for (const k of ['account.password', 'admin.password', 'presence.xsi_password']) sdlg.querySelector(`[data-k="${k}"]`).value = '';
+      await loadSettings();
+      showRestart(j.restart_required);
+      if (j.applied.includes('team')) { teamDefaulted = false; }
+    } catch (e) { sMsg('Couldn’t save: ' + e.message, 'bad'); }
+    finally { btn.disabled = false; }
+  };
+  $('s-test').onclick = async () => {
+    const m = $('s-test-msg'); m.className = ''; m.textContent = 'Testing…';
+    try {
+      const r = await fetch('/api/settings/test-admin', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                         body: JSON.stringify({values: collect()})});
+      const j = await r.json();
+      m.textContent = j.error || j.message; m.className = j.ok ? 'ok' : 'bad';
+    } catch (e) { m.textContent = e.message; m.className = 'bad'; }
+  };
+  // ---- updates ----
+  let updInfo = null;
+  const updMsg = (t, cls) => { $('s-upd-msg').textContent = t || ''; $('s-upd-msg').className = 's-upd-msg' + (cls ? ' ' + cls : ''); };
+  const renderUpdates = () => {
+    const u = updInfo;
+    $('s-cur-ver').textContent = (u && u.version) || (sData && sData.version) || '';
+    $('s-check').hidden = !(u && u.source);
+    const av = u && u.available;
+    $('s-avail').textContent = av ? ` · ${av.version} available` : '';
+    if (!$('s-updates').dataset.touched) {
+      updMsg(!u ? 'Updates install from the SIP Phone app.' :
+             u.state === 'installing' ? 'Installing…' :
+             !u.can_install ? 'Running from a terminal: install updates with pip.' :
+             u.last_error ? 'Last check failed: ' + u.last_error :
+             u.source ? (u.last_check ? 'Checked ' + relTime(u.last_check) + ' ago.' : 'Not checked yet.') : '', (u && u.last_error) ? 'bad' : '');
+    }
+    let notes = $('s-updates').querySelector('.s-upd-notes');
+    if (av && av.notes) {
+      if (!notes) { notes = document.createElement('div'); notes.className = 's-upd-notes'; $('s-upd-msg').after(notes); }
+      notes.textContent = av.notes;
+    } else if (notes) notes.remove();
+  };
+  const waitForNewVersion = async (label, maxMs) => {
+    try { parent.postMessage({sipphone: 'restarting'}, '*'); } catch (e) {}
+    const t0 = Date.now();
+    await new Promise(r => setTimeout(r, 2500));
+    while (Date.now() - t0 < maxMs) {
+      try { const r = await fetch('/api/version', {cache: 'no-store'}); if (r.ok) { location.reload(); return; } } catch (e) {}
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    sMsg(label + ' is taking longer than expected. Open SIP Phone from the Start menu to check.', 'bad');
+  };
+  const installUpdate = async (how) => {
+    if (inCall() && !confirm('A call is active. Hang up and update?')) return;
+    $('s-updates').dataset.touched = '1';
+    updMsg(how === 'file' ? 'Uploading…' : 'Downloading…');
+    let j;
+    try {
+      if (how === 'file') {
+        const f = $('s-file').files[0]; if (!f) return;
+        const fd = new FormData(); fd.append('file', f, f.name);
+        j = await (await fetch('/api/update/upload', {method: 'POST', body: fd})).json();
+      } else {
+        j = await (await fetch('/api/update/install', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).json();
+      }
+    } catch (e) { updMsg('Update failed: ' + e.message, 'bad'); return; }
+    if (j.error) { updMsg(j.error, 'bad'); return; }
+    if (j.staged) { updMsg(j.message, 'ok'); return; }
+    updMsg(`Installing ${j.version}… SIP Phone restarts by itself (about a minute).`, 'ok');
+    $('updbar').hidden = true;
+    if (!sdlg.open) sdlg.showModal();
+    sMsg(`Installing ${j.version}…`);
+    await waitForNewVersion('The update', 240000);
+  };
+  $('s-file').addEventListener('change', () => installUpdate('file'));
+  $('s-bridge-fix').onclick = async () => {
+    const el = $('s-bridge'); el.className = ''; el.textContent = 'Registering…';
+    try {
+      const j = await (await fetch('/api/extension/register-bridge', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).json();
+      el.textContent = j.error || 'Browser link: ready.'; el.className = j.ok ? 'ok' : 'bad';
+      $('s-bridge-fix').hidden = !!j.ok;
+    } catch (e) { el.textContent = e.message; el.className = 'bad'; }
+  };
+  $('s-ext-open').onclick = async () => {
+    const m = $('s-ext-msg'); m.className = 's-upd-msg'; m.textContent = '';
+    try {
+      const j = await (await fetch('/api/extension/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).json();
+      m.textContent = j.error || `Opened ${j.page} — turn on Developer mode there and drop the zip onto it.`; m.className = 's-upd-msg ' + (j.ok ? 'ok' : 'bad');
+    } catch (e) { m.textContent = e.message; m.className = 's-upd-msg bad'; }
+  };
+  $('s-ext-zip').addEventListener('click', () => { const m = $('s-ext-msg'); m.className = 's-upd-msg ok'; m.textContent = 'Saving the zip to your Downloads folder…'; });
+  $('upd-install').onclick = () => installUpdate('available');
+  $('upd-more').onclick = async () => { await openSettings(); $('s-updates').scrollIntoView({block: 'start'}); };
+  $('s-check').onclick = async () => {
+    $('s-updates').dataset.touched = '1'; updMsg('Checking…');
+    try {
+      const j = await (await fetch('/api/update/check', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).json();
+      updMsg(j.error || j.message, j.ok ? 'ok' : 'bad');
+      updInfo = await (await fetch('/api/update', {cache: 'no-store'})).json();
+      delete $('s-updates').dataset.touched; const keep = j.error || j.message; renderUpdates(); updMsg(keep, j.ok ? 'ok' : 'bad');
+    } catch (e) { updMsg(e.message, 'bad'); }
+  };
+
+  const doRestart = async () => {
+    if (inCall() && !confirm('A call is active. Hang up and restart?')) return;
+    try { await api('/api/restart'); } catch (e) { return; }
+    try { parent.postMessage({sipphone: 'restarting'}, '*'); } catch (e) {}
+    sMsg('Restarting… this page reconnects by itself.');
+    $('s-restart').hidden = true;
+    const t0 = Date.now();
+    await new Promise(r => setTimeout(r, 1500));
+    while (Date.now() - t0 < 60000) {
+      try { const r = await fetch('/api/version', {cache: 'no-store'}); if (r.ok) { location.reload(); return; } } catch (e) {}
+      await new Promise(r => setTimeout(r, 700));
+    }
+    sMsg('The phone didn’t come back. Open SIP Phone from the Start menu.', 'bad');
+  };
+  $('s-restart-btn').onclick = doRestart;
+  // the extension's options page / side panel can ask for Settings
+  window.addEventListener('message', e => {
+    if (/^chrome-extension:\/\//.test(e.origin) && e.data && e.data.sipphone === 'open-settings') openSettings();
+  });
+  if (location.hash === '#settings') setTimeout(openSettings, 200);
+
+  // ---- transcript ----
+  const fmtTime = t => new Date(t * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+  const addMsg = ev => {
+    const d = document.createElement('div');
+    if (ev.kind === 'said') {
+      d.className = 'msg said'; d.textContent = ev.text;
+      const t = document.createElement('span'); t.className = 't'; t.textContent = fmtTime(ev.t); d.appendChild(t);
+    } else if (ev.kind === 'heard') {
+      d.className = 'msg heard'; d.textContent = ev.text;
+      const t = document.createElement('span'); t.className = 't'; t.textContent = 'Caller · ' + fmtTime(ev.t); d.appendChild(t);
+    } else if (ev.kind === 'dtmf') {
+      d.className = 'msg dtmf'; d.innerHTML = 'Sent tones <kbd></kbd>'; d.querySelector('kbd').textContent = ev.text;
+    } else {
+      d.className = 'msg event' + (/^(Connected|Incoming|Call ended)/.test(ev.text) ? ' strong' : '');
+      d.textContent = ev.text;
+    }
+    const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40;
+    thread.appendChild(d);
+    if (atBottom) thread.scrollTop = thread.scrollHeight;
+  };
+
+  // ---- state render ----
+  const render = s => {
+    registered = s.registered; call = s.call; tts = s.tts;
+    presenceMode = s.mode === 'presence';
+    document.body.classList.toggle('presence', presenceMode);
+    if (s.update !== undefined) { updInfo = s.update; }
+    const av = s.update && s.update.available;
+    $('updbar').hidden = !av || s.update.state === 'installing';
+    if (av) $('upd-ver').textContent = av.version;
+    const reg = $('reg'); reg.className = 'reg ' + (presenceMode ? 'neutral' : s.registered ? 'on' : 'off');
+    const idLabel = presenceMode ? (s.display_name || 'Team view') : (s.display_name || s.account);
+    $('regtext').innerHTML = presenceMode
+      ? (s.needs_setup ? `<b></b> — set up the Team view in Settings` : `<b></b> · Team view only`)
+      : s.registered
+      ? `<b></b> is registered`
+      : s.needs_setup ? `<b></b> — set up your account in Settings`
+      : `<b></b> is not registered — <span></span>`;
+    const rd = $('regtext').querySelector('span'); if (rd) rd.textContent = s.reg_detail;
+    $('regtext').querySelector('b').textContent = idLabel;
+    if (s.display_name) $('regtext').title = s.account;
+
+    const cs = $('callstate');
+    if (!call) { cs.className = 'callstate'; cs.innerHTML = '<span class="what">No call</span>'; }
+    else {
+      const who = idNum(call.name, call.number);
+      const what = {calling: 'Calling…', incoming: 'Ringing',
+                    connected: (call.transferring ? 'Transferring · ' : call.local_hold ? 'On hold · ' : call.hold ? 'Held by caller · ' : 'Connected · ') + call.elapsed,
+                    ended: 'Ended'}[call.state];
+      cs.className = 'callstate ' + (call.state === 'incoming' ? 'ringing' : call.state === 'connected' ? 'live' : '');
+      cs.innerHTML = `<span class="who"></span><span class="what"></span>`;
+      cs.querySelector('.who').textContent = who; cs.querySelector('.what').textContent = what;
+    }
+    const live = inCall();
+    const wasLive = $('btn-call').hidden, wasReg = !$('btn-call').disabled;
+    if (wasLive !== live || wasReg !== s.registered) setTimeout(() => { renderContacts(); if (!$('recent').hidden) loadRecent(); }, 0);
+    $('incall').hidden = !connected();
+    const consult = call && call.consult;
+    $('consultbar').hidden = !consult;
+    if (consult) {
+      const nm = idNum(consult.name, consult.number) || consult.number;
+      const st = consult.state === 'calling' ? 'Calling ' : consult.conference ? 'In conference with ' : 'Consulting ';
+      $('consult-who').innerHTML = st + '<b></b>';
+      $('consult-who').querySelector('b').textContent = nm;
+      const ready = consult.state === 'connected';
+      $('btn-complete').disabled = !ready; $('btn-conf').disabled = !ready;
+      $('btn-conf').textContent = consult.conference ? 'Conferenced' : 'Conference';
+      $('btn-conf').disabled = !ready || consult.conference;
+    }
+    $('btn-hold').className = call && call.local_hold ? 'on' : ''; $('btn-hold').textContent = call && call.local_hold ? 'Resume' : 'Hold';
+    $('btn-mute').className = call && call.muted ? 'on' : ''; $('btn-mute').textContent = call && call.muted ? 'Unmute' : 'Mute';
+    $('btn-transfer').disabled = !!(call && call.transferring);
+    if (call && call.state === 'incoming') startRing(); else stopRing();
+    $('listening').hidden = !s.stt;
+    $('quit').hidden = !s.can_quit;
+    $('btn-settings').hidden = !s.has_settings;
+    if (awaitingReg && Date.now() - awaitingReg > 800 && !/^(registering|unregistered)/.test(s.reg_detail)) {
+      awaitingReg = 0;
+      if (sdlg.open) sMsg(s.registered ? 'Saved. Registered as ' + (s.display_name || s.account) + '.'
+                                       : 'Saved, but registration failed: ' + s.reg_detail, s.registered ? 'ok' : 'bad');
+    }
+    $('btn-settings').classList.toggle('attn', !!s.needs_setup || !!s.restart_pending);
+    $('btn-settings').title = s.needs_setup ? 'Set up your SIP account' : s.restart_pending ? 'Restart needed to apply settings' : 'Settings';
+    if (s.has_settings && s.needs_setup && !setupShown) { setupShown = true; openSettings(); }
+    const wb = $('warnbar'), warns = s.warnings || [];
+    if (warns.join('|') !== wb.dataset.w) {
+      wb.dataset.w = warns.join('|'); wb.hidden = !warns.length; wb.textContent = '';
+      for (const w of warns) { const d = document.createElement('div'); d.textContent = w; wb.appendChild(d); }
+      if (warns.length && s.has_settings) { const b = document.createElement('button'); b.textContent = 'Open Settings'; b.onclick = openSettings; wb.appendChild(b); }
+    }
+    lastState = s;
+    $('tab-team').hidden = (!s.has_monitor && !presenceMode) || boardsData.hidden.includes('team');
+    if (s.has_monitor && !teamDefaulted) {
+      teamDefaulted = true;
+      let want = ''; try { want = localStorage.getItem('sipphone.tab') || ''; } catch (e) {}
+      const vis = visibleTabs();
+      showTab(vis.includes(want) ? want : vis.includes('team') ? 'team' : (vis.find(t => t.startsWith('board:')) || vis[0] || 'contacts'));
+    }
+    if (!s.has_monitor && teamTab && !presenceMode) showTab(visibleTabs()[0] || 'contacts');
+    if (presenceMode && !teamTab && !curTab.startsWith('board:')) showTab(visibleTabs()[0] || 'team');
+    if (s.version) { $('ver').textContent = 'v' + s.version; if (!$('s-cur-ver').textContent) $('s-cur-ver').textContent = s.version; }
+    if (s.stt) $('stt-on').checked = s.stt.enabled;
+    $('btn-call').hidden = live; $('btn-call').disabled = !s.registered;
+    $('btn-answer').hidden = !(call && call.state === 'incoming');
+    $('btn-hang').hidden = !live;
+    $('btn-hang').className = 'hang' + (call && call.state === 'incoming' ? '' : ' wide');
+    $('btn-hang').textContent = call && call.state === 'calling' ? 'Cancel' : call && call.state === 'incoming' ? 'Decline' : 'Hang up';
+    $('hint').textContent = connected() ? 'Keys now send touch tones to the call.'
+                          : live ? '' : 'Keys dial a number. During a call they send touch tones.';
+    if (s.events.some(e => e.text.startsWith('Call ended')) && !live) { number.value = ''; if (!$('recent').hidden) setTimeout(loadRecent, 300); }
+
+    const can = connected() && !!tts;
+    $('btn-speak').disabled = !can;
+    const sc = s.script;
+    $('scriptbar').hidden = !(sc && sc.running);
+    if (sc && sc.running) $('scriptbar-text').textContent = `Playing “${sc.name}” — line ${sc.step} of ${sc.total}: ${sc.line}`;
+    const key = can + ':' + (sc && sc.running);
+    if (key !== lastScriptKey) { lastScriptKey = key; $('phrases').querySelectorAll('.script').forEach(b => { b.disabled = !can || (sc && sc.running); }); }
+    text.placeholder = !tts ? (s.has_settings ? 'Text-to-speech is off — turn it on in Settings' : 'Text-to-speech is off — start the phone with --tts piper')
+                     : can ? 'Type what the caller should hear, then press Enter' : 'Connect a call to speak';
+    const st = $('ttsstatus');
+    if (!tts) st.textContent = 'Audio: ' + s.audio;
+    else if (tts.speaking) { st.className = 'speaking'; st.textContent = `Speaking · ${tts.queued}s queued`; }
+    else if (s.stt && s.stt.busy) { st.className = ''; st.textContent = 'Transcribing…'; }
+    else { st.className = ''; st.textContent = s.registered ? `Registration renews in ${Math.round(s.expires_in / 60)} min` : ''; }
+
+    for (const ev of s.events) { addMsg(ev); lastEvent = ev.id; }
+    showNotifications(s.notifications);
+    if (s.events.some(e => e.kind === 'event' && e.text.startsWith('Incoming')) && document.hidden) {
+      document.title = '● Incoming call — SIP Phone';
+    } else if (!call || call.state !== 'incoming') document.title = 'SIP Phone';
+  };
+
+  const poll = async () => {
+    try { render(await (await fetch('/api/state?since=' + lastEvent)).json()); }
+    catch (e) { $('regtext').textContent = document.title === 'SIP Phone stopped' ? 'Phone stopped — launch SIP Phone again to reconnect' : 'SIP Phone is not reachable'; $('reg').className = 'reg off'; }
+    setTimeout(poll, call && call.state === 'connected' ? 500 : 800);
+  };
+  poll();
+})();
+</script>
+</body>
+</html>

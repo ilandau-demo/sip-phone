@@ -1,0 +1,224 @@
+SIP PHONE  -  version 2.4.3
+==========================
+
+A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
+Phone", plus a live Team view. Two ways to use it:
+
+  PHONE + TEAM VIEW   Make and take calls in your browser; type text and the
+                      caller hears it spoken; see what the caller says as text;
+                      hold, mute, transfer (blind or warm), conference, pick up
+                      a teammate's ringing call. The Team view shows who is
+                      free, ringing or on a call (and with whom).
+
+  TEAM VIEW ONLY      Just the presence board. Nothing registers and nothing
+                      can be called - for anyone who only needs to see the team.
+
+Optional Chrome / Edge extension: the phone (or the team board) in the browser's
+side panel, right-click any phone number to call it, incoming-call pop-ups.
+
+
+QUICK START
+-----------
+  1. Right-click the .zip > Extract All.  Open the extracted folder.
+  2. Double-click  Install.bat  and answer its questions (Enter = the default).
+       - If Windows says "Windows protected your PC": More info > Run anyway.
+       - No Python on this PC? The installer offers to install it.
+  3. SIP Phone opens in your browser with its Settings screen. Pick
+     "Phone + Team view" or "Team view only", fill in the details below, Save.
+
+  That's it. Start it later from "SIP Phone" in the Start menu (right-click >
+  Pin to Start), or from the browser extension.
+
+
+INSTALLING WITHOUT Install.bat
+------------------------------
+  Install.bat is a convenience, not a requirement. With Python 3.11 or newer
+  already on the PC, this does the same job (PowerShell, in the extracted folder):
+     python -m pip install --upgrade sipphone-2.3.0-py3-none-any.whl
+     python -m sipphone --setup
+  --setup creates the settings, downloads the voice (when piper-tts is
+  installed), adds the Start-menu shortcut and connects the browser extension.
+  The app re-connects the extension every time it starts, so after a later
+  "pip install --upgrade" nothing else is needed.
+  Optional:  python -m pip install piper-tts        (text-to-speech)
+             python -m pip install faster-whisper   (speech-to-text)
+  You still want Install.bat when there is no Python yet (it installs it), or
+  when Python came from the Microsoft Store and is older than 3.11 (that build
+  can't write the registry entry the browser needs).
+
+
+WHAT TO FILL IN
+---------------
+  Phone + Team view   ->  Settings > Phone line
+      In NextOS: Voice & Analytics > Users > Manage Users > (user) > Device.
+      Set "Available Devices" to  Generic SIP Phone  and Save. The page shows
+      SIP Username, Authentication Name, Password (the SIP one, NOT your portal
+      login) and Domain. Type them in, add a Display name, click Save.
+      The top line changes to "<your name> is registered" within seconds.
+
+  Team view (either mode)  ->  Settings > Team view
+      Presence source "User login (events)": enter your own user ID and
+      password (not an admin). The phone system pushes ringing, calls and Do
+      Not Disturb for everyone in the company directory it lets your login
+      watch; anyone it refuses shows as "Unknown - not monitored" rather than
+      available. Click Check, then Save. The Team tab appears and updates live.
+      Or "Admin XSI login": the same live engine with an admin account, which
+      also shows Offline (no device registered). The admin password never
+      leaves this app.
+      Only people get presence; tick "Also list as speed dials" to show hunt
+      groups, queues, auto attendants etc. as click-to-call entries.
+      Hide from the list: your own user ID or extension.
+
+  On the Team tab: type to search (name, extension, department...), click the
+  filter chips to narrow by status, click a name for details, and the bell to
+  be told when that person becomes available (a toast, a sound, and a spoken
+  notification if a voice provider is assigned).
+
+  Scripts  ->  "Add a script" next to the quick phrases
+      Type a line, set the pause in seconds after it, add the next line (Enter
+      adds a row). Or import a .txt file: one line per row, with "pause 3"
+      on its own line between lines to set the wait. On a call, press the
+      script's button and it is spoken line by line; Stop interrupts it.
+
+  Voice  ->  Settings > Voice engine > Manage voice providers
+      Text-to-speech and the caller transcript are providers you can add,
+      test, switch and remove without restarting: Piper or Kokoro (offline,
+      download a voice from Models), System voices (no download), an
+      OpenAI-compatible server, ElevenLabs, or your own program. Speech-to-
+      text: Faster-Whisper, Whisper, Vosk, Sherpa-ONNX or your own program.
+      Drop your own Piper .onnx voices in the models folder and they appear.
+
+  Custom tabs: the "..." button next to Team / Contacts / Recent makes your own
+  boards mixing teammates (with presence) and contacts (speed dials), and lets
+  you pin or unpin the built-in tabs.
+
+  The first time, Windows Firewall may ask about Python - click Allow, or calls
+  will have no audio.
+
+
+THE BROWSER EXTENSION (Chrome or Edge)
+--------------------------------------
+  Two ways to get it:
+
+  From the Chrome Web Store (when your administrator has published it):
+      Install.bat opens the store page - click "Add to Chrome" (Edge: allow
+      extensions from other stores), then pin SIP Phone from the puzzle-piece
+      menu. It updates itself. If you install it later from the store link,
+      paste the store's extension ID (the 32 letters at the end of the link)
+      into Settings > Browser extension > "Chrome Web Store extension ID".
+
+  From this folder (no store):
+      Install.bat saves "SIP Phone Browser Extension.zip" to Downloads and
+      opens the browser's Extensions page: turn on Developer mode, drag the
+      zip onto the page, pin SIP Phone. When the app updates the extension it
+      saves a new zip and asks you to drop it again.
+
+
+  Team view without installing anything
+      Someone who only needs to see who is free, ringing or on a call can
+      skip Install.bat: add the extension (zip below), click its icon, and
+      choose "Just show my team (no install)". Enter the XSI server, your
+      user login and password, click Check, then Save, and allow the
+      browser to reach the XSI server when asked. Presence streams straight
+      from the phone system; the gear at the top changes or turns it off.
+      No calls, transfers or pick-ups in this mode - that needs the app.
+  The extension is the small file  "SIP Phone Browser Extension.zip"  in this
+  folder - NOT the big SIP-Phone-x.y.z.zip you downloaded (Chrome answers
+  "Could not unzip extension" to that one, and "Manifest file is missing" if
+  you point "Load unpacked" at this folder).
+
+  To add it, one time only:
+    1. Open  chrome://extensions   (Edge: edge://extensions)
+    2. Turn on "Developer mode" (top right in Chrome; left side in Edge)
+    3. Drag  SIP Phone Browser Extension.zip  from this folder onto that page
+    4. Click the puzzle-piece icon in the toolbar and pin "SIP Phone"
+  (Install.bat offers to open both windows for you when you answer Y. Prefer
+  "Load unpacked"? Choose the  Browser Extension  folder in here, or the
+  self-updating one at C:\Users\<you>\SIP Phone Extension.)
+
+  When the extension's own files change (not every app update does), the app
+  saves a new zip to your Downloads folder and the extension shows a
+  notification: drag that zip onto the Extensions page again - done.
+
+  In the side panel: the gear icon opens Settings; right-click the toolbar icon
+  > Options for pop-up preferences. The same zip is always available under
+  Settings > Browser extension.
+
+
+UPDATING
+--------
+  Any of these - your settings, contacts and history are always kept, and the
+  browser extension updates itself:
+    - In the app: Settings > Updates > "Install from file...", pick the new
+      sipphone-x.y.z.whl (or the whole SIP-Phone-x.y.z.zip). It installs and
+      restarts by itself - about a minute.
+    - Or extract the new zip and run its Install.bat.
+    - For a team: put the new .whl files in a shared folder (or host a
+      latest.json) and enter it under Settings > Updates > "Update source".
+      Every copy then shows "x.y.z is available - Install now", or installs it
+      automatically if you tick that box.
+
+
+ROLLING OUT TO SEVERAL PCs
+--------------------------
+  Install.bat asks questions. For hands-off installs run, in PowerShell:
+     powershell -ExecutionPolicy Bypass -File install.ps1 -Quiet
+  Useful switches:  -Mode presence   (Team view only)   -UpdateSource \\server\share\sipphone
+                    -NoTTS  -STT  -NoExtension  -NoStartup
+  Settings can also be pre-filled:  python -m sipphone --set presence.mode=admin --set admin.username=...
+  Each person still enters their own passwords in Settings.
+
+
+USING IT
+--------
+  - Dial with the keypad or click a contact, a team member or a recent call.
+  - During a call: Hold, Mute, Transfer. Hover a team member for
+    Transfer (blind), Warm (talk to them first) or Conf (3-way).
+  - Type in the box at the bottom and press Enter - the caller hears it.
+  - Quick phrases above the box send with one click ("Edit phrases" to change).
+  - "Start SIP Phone when I sign in" (Settings > Startup) keeps it running in
+    the background so the extension always finds it.
+
+
+TROUBLESHOOTING
+---------------
+  "not registered - timeout"
+      Nextiva isn't answering. Check Settings > Phone line > Server and network
+      (port 5060), allow Python in Windows Firewall, and turn off "SIP ALG" on
+      your router. Some guest/hotel/VPN networks block phone traffic entirely.
+
+  "authentication failed"
+      Wrong SIP password or Authentication Name - use the Device page values,
+      not your portal login. Fix them in Settings and click Save.
+
+  One-way or no audio
+      Allow Python in Windows Firewall; turn off SIP ALG on the router.
+
+  A yellow bar at the top of the app
+      Something optional didn't start (voice, speech recognizer, audio device or
+      SIP port), or an update failed. The phone still works; the bar says what
+      to fix in Settings. Update details are in update.log next to the settings.
+
+  Team view shows an error at the bottom
+      Open Settings > Team view and click Check: it reports the login, the
+      directory and the event channel. "watch nobody" = your login has no
+      monitoring rights (ask your provider). "acknowledgements failing" = the
+      server refuses event responses; presence lags until it accepts them.
+
+  Extension says "Install the SIP Phone app"
+      The browser can't find the bridge. Start SIP Phone once (it registers the
+      bridge on every start) and check Settings > Browser extension says
+      "Browser link: ready"; if not, click "Connect now" - or run Install.bat.
+
+  Find or edit your settings as a file
+      PowerShell:  python -m sipphone --init   (opens config.ini)
+      The app's log (app.log) is in the same folder.
+
+  See every SIP message (for support)
+      PowerShell:  python -m sipphone --debug
+
+
+UNINSTALL
+---------
+  Double-click  Uninstall.bat  (it asks whether to keep your settings), then
+  remove the extension at chrome://extensions.

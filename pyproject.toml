@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sipphone"
+version = "2.4.3"
+description = "SIP 2.0 softphone with text-to-speech and a browser UI (Nextiva-ready)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = ["numpy>=1.20", "sounddevice>=0.4"]
+
+[project.optional-dependencies]
+tts = ["piper-tts>=1.2"]
+stt = ["faster-whisper>=1.0"]
+
+[project.scripts]
+sipphone = "sipphone.cli:main"
+sipphone-native-host = "sipphone.native_host:main"
+
+[project.gui-scripts]
+sipphone-app = "sipphone.app:main"
+
+[tool.setuptools]
+packages = ["sipphone", "sipphone.authentication", "sipphone.presence", "sipphone.voice", "sipphone.voice.tts", "sipphone.voice.stt"]
+
+[tool.setuptools.package-data]
+sipphone = ["ui.html", "config.example.ini", "sipphone.ico", "extension/*.json", "extension/*.js", "extension/*.html", "extension/*.css", "extension/icons/*.png"]
