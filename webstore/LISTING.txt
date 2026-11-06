@@ -1,0 +1,83 @@
+CHROME WEB STORE LISTING - SIP Phone extension 2.4.3
+=====================================================
+(paste these into the Developer Dashboard; steps are in STEPS.txt)
+
+NAME
+  SIP Phone
+
+SUMMARY (132 characters max)
+  Your phone in the side panel: click-to-call, call pop-ups, and live team presence - with the desktop app or on its own.
+
+DESCRIPTION
+  SIP Phone puts your business phone into the browser's side panel.
+
+  With the SIP Phone desktop app installed on your computer:
+  - Right-click any phone number or tel: link and choose "Call with SIP Phone"
+  - Answer or decline incoming calls from a notification, even with the panel closed
+  - Hold, transfer, conference, and type text that the caller hears spoken
+  - Toolbar badge shows ringing, on a call, or how many teammates are on calls
+
+  Team presence - no desktop app needed:
+  - Sign in with your own phone-system (BroadWorks XSI) login
+  - See who is free, ringing, on a call, on hold, or on Do Not Disturb, live
+  - Search as you type, filter by status or department, open anyone's details
+  - Ask to be told when someone becomes available, with an optional spoken alert
+  - Hunt groups and queues listed as quick references
+
+  The extension talks only to the SIP Phone app on your own computer and, in
+  team-presence mode, to the phone-system server you enter. Nothing is sent
+  anywhere else and no data is collected by the developer.
+
+CATEGORY            Productivity -> Communication
+LANGUAGE            English (United States)
+
+STORE ICON          128x128 - included in the zip (icons/icon128.png)
+SCREENSHOTS         screenshot-1-phone-1280x800.png
+                    screenshot-2-presence-1280x800.png
+SMALL PROMO TILE    440x280 - optional (promo-tile-440x280.png included)
+
+---------------------------------------------------------------- PRIVACY TAB
+SINGLE PURPOSE
+  Operate the user's business phone from the browser: place and answer calls
+  through the SIP Phone desktop app, and show live team presence from the
+  user's phone system.
+
+PERMISSION JUSTIFICATIONS
+  nativeMessaging   Talks to the SIP Phone desktop app on the same computer,
+                    which is the phone engine; the extension is its front end.
+  sidePanel         Shows the phone and the team view in the side panel.
+  contextMenus      Adds "Call with SIP Phone" for selected numbers and tel: links.
+  notifications     Incoming-call Answer/Decline pop-ups, teammate-ringing alerts,
+                    and "this person is now available" alerts the user asked for.
+  storage           Remembers the user's preferences, notification rules and,
+                    in team-presence mode, the phone-system login the user entered.
+  offscreen         Keeps the presence event stream from the phone system open
+                    in the background while the browser runs (team-presence
+                    mode); reason DOM_PARSER - events arrive as XML.
+  tts               Optionally speaks availability notifications with the
+                    browser's built-in voice (off by default).
+  host permission http://127.0.0.1:8088/*
+                    Loads the phone's user interface served by the local app on
+                    the computer's loopback address.
+  optional host permission https://*/*
+                    Requested at runtime, only for the one XSI server address the
+                    user types in team-presence mode, so presence can be read from
+                    the user's own phone system. Never requested otherwise.
+
+REMOTE CODE         No. All code is in the package.
+
+DATA USAGE (Privacy practices certification)
+  Does this extension collect user data?  -> it handles "Authentication
+  information" (the user's own phone-system login, stored locally, used only
+  to sign in to that system) and "Personal communications"-adjacent data
+  (phone numbers the user clicks to call, passed to the local app). Tick those
+  two; tick "not sold", "not used for unrelated purposes", "not used for
+  creditworthiness". Nothing is transmitted to the developer.
+  Privacy policy URL: https://github.com/ilandau-demo/sip-phone-privacy
+  (that repository must be public).
+
+---------------------------------------------------------------- DISTRIBUTION
+VISIBILITY   Unlisted (anyone with the link) - recommended for a demo tool;
+             or Private to your Google Workspace domain.
+REGIONS      All regions.
+PRICING      Free.
