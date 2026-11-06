@@ -32,4 +32,4 @@ extension.
 None. The developer has no server and receives no data from the extension.
 
 **Contact**
-Questions: <your contact email or support address here>.
+Questions: ianlandau0@gmail.com.
