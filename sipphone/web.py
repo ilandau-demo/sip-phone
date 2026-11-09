@@ -495,9 +495,12 @@ def make_handler(state: UIState):
             elif u.path == "/api/extension":
                 from . import extension_sync as ext
                 from .native_host import bridge_status
+                from .native_host import KNOWN_EXTENSIONS
                 self._json({"build": ext.build_id(), "version": __import__("sipphone").__version__,
                             "zip_name": ext.zip_name(), "folder": ext.extension_dir(),
-                            "downloads": ext.downloads_dir(), "bridge": bridge_status()})
+                            "downloads": ext.downloads_dir(), "bridge": bridge_status(),
+                            "known": [{"id": i, "kind": k} for i, k in KNOWN_EXTENSIONS.items()],
+                            "connected": getattr(state, "extension_seen", None)})
             elif u.path == "/api/extension.zip":
                 # the droppable zip, as a download (Settings -> Browser extension)
                 from . import extension_sync as ext
@@ -589,6 +592,14 @@ def make_handler(state: UIState):
                     if not r["ok"]:
                         raise RuntimeError(r["note"] or "couldn't register the bridge")
                     return self._json({"ok": True, "where": r["where"], "path": r["path"]})
+                elif u.path == "/api/extension/seen":
+                    # the bridge reports which copy of the extension launched it
+                    ext_id = str(body.get("id", "") or "").strip().lower()
+                    if ext_id and not (len(ext_id) == 32 and ext_id.isalpha()):
+                        raise RuntimeError("not an extension ID")
+                    state.extension_seen = {"id": ext_id, "kind": str(body.get("kind", "") or "")[:40],
+                                            "at": time.time()}
+                    return self._json({"ok": True})
                 elif u.path == "/api/extension/hello":
                     # A copy of the extension the bridge doesn't know yet (a Chrome
                     # Web Store install has its own ID) introduces itself. The ID is

@@ -42,7 +42,7 @@ It is built into the app's bridge allow-list and into `$StoreUrl` in
 `installer/install.ps1`, so Install.bat sends new users to the store and the
 store copy connects to the app on its own. Share the store link: *Add to
 Chrome* → pin SIP Phone. Presence-only users are done; phone users also run
-Install.bat from `releases/2.4.6/SIP-Phone-2.4.6.zip`.
+Install.bat from `releases/2.4.7/SIP-Phone-2.4.7.zip`.
 
 ## Updating the extension later
 ```

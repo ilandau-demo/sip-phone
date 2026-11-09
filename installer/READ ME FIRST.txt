@@ -1,4 +1,4 @@
-SIP PHONE  -  version 2.4.6
+SIP PHONE  -  version 2.4.7
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP

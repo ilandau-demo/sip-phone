@@ -114,3 +114,23 @@ class BridgeRegistrationTests(unittest.TestCase):
         finally:
             os.environ["HOME"] = old_home; nh.host_exe_path = old_exe
             shutil.rmtree(home, ignore_errors=True)
+
+
+class CallerDetection(unittest.TestCase):
+    def test_store_and_zip_ids_are_built_in_and_recognised(self):
+        import sys
+        from sipphone import native_host as nh
+        self.assertIn("kghndilnhefammdeabhnjlphlmeeomno", nh.allowed_extension_ids())
+        self.assertIn("ekooaigkfmobhjmioleeahcanjnhhheh", nh.allowed_extension_ids())
+        old = sys.argv
+        try:
+            sys.argv = ["host", "chrome-extension://kghndilnhefammdeabhnjlphlmeeomno/", "--parent-window=0"]
+            self.assertEqual(nh.caller_extension(), ("kghndilnhefammdeabhnjlphlmeeomno", "Chrome Web Store"))
+            sys.argv = ["host", "chrome-extension://ekooaigkfmobhjmioleeahcanjnhhheh/"]
+            self.assertEqual(nh.caller_extension()[1], "zip / unpacked build")
+            sys.argv = ["host", "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"]
+            self.assertEqual(nh.caller_extension()[1], "custom build")
+            sys.argv = ["host"]
+            self.assertEqual(nh.caller_extension(), ("", ""))
+        finally:
+            sys.argv = old

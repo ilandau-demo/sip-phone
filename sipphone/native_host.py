@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -128,10 +129,25 @@ def host_exe_path() -> str:
 # folder. The app registers itself on every start, so no installer is needed
 # for the bridge (Python 3.11+ from the Microsoft Store writes the real
 # registry; its AppData is still virtualised, so the manifest lives outside it).
-ALLOWED_EXTENSION_IDS = [
-    "ekooaigkfmobhjmioleeahcanjnhhheh",      # the unpacked / zip build (fixed key)
-    "kghndilnhefammdeabhnjlphlmeeomno",      # the Chrome Web Store listing
-]
+# The two copies of the extension that exist. Both IDs are fixed for good: the
+# zip/unpacked build is signed with the key in .extkey/, the store copy with
+# the key Google made when the listing was created.
+KNOWN_EXTENSIONS = {
+    "ekooaigkfmobhjmioleeahcanjnhhheh": "zip / unpacked build",
+    "kghndilnhefammdeabhnjlphlmeeomno": "Chrome Web Store",
+}
+ALLOWED_EXTENSION_IDS = list(KNOWN_EXTENSIONS)
+
+
+def caller_extension() -> tuple:
+    """(id, kind) of the extension that launched this bridge. Chrome passes the
+    caller's origin (chrome-extension://<id>/) as the first argument."""
+    for a in sys.argv[1:]:
+        m = re.match(r"chrome-extension://([a-p]{32})/?$", a.strip().lower())
+        if m:
+            i = m.group(1)
+            return i, KNOWN_EXTENSIONS.get(i, "custom build")
+    return "", ""
 
 
 def allowed_extension_ids() -> list:
@@ -324,10 +340,22 @@ def _key(st: dict) -> str:
                        t.get("error"), u.get("version"), st.get("extension_build")])
 
 
+def _report_caller() -> bool:
+    """Tell the app which copy of the extension is talking to it (Settings
+    shows "connected: Chrome Web Store copy"). Returns True once delivered."""
+    ext_id, kind = caller_extension()
+    try:
+        _http("/api/extension/seen", {"id": ext_id, "kind": kind})
+        return True
+    except Exception:
+        return False
+
+
 def pump(ch: Channel, stop: threading.Event, interval: float = 1.0) -> None:
     last = None
     beat = 0.0
     misses = 0
+    reported = False
     while not stop.is_set():
         st = build_status()
         if not st.get("up") and not st.get("updating") and not st.get("_refused"):
@@ -343,10 +371,13 @@ def pump(ch: Channel, stop: threading.Event, interval: float = 1.0) -> None:
             if misses:
                 log.info("status poll recovered after %d miss(es)", misses)
             misses = 0
+            if not reported:
+                reported = _report_caller()
         else:
             misses = 0
         if not st.get("up") and last and json.loads(last)[0]:
             log.warning("app reported down: %s", st.get("_err", "connection refused"))
+            reported = False
         st.pop("_err", None); st.pop("_refused", None)
         if not st.get("up") and st.get("updating"):
             # An update is installing: pip must be able to replace this very

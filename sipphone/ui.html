@@ -757,7 +757,10 @@
         <li>Drag the downloaded zip onto that page.</li>
         <li>Pin SIP Phone from the puzzle-piece menu.</li>
       </ol>
-      <label class="s-field"><span>Chrome Web Store extension ID</span><input data-k="extension.store_id" spellcheck="false" placeholder="32 letters from the store link (optional)"><small>If your team installs the extension from the Chrome Web Store, paste its ID here so the app accepts it. Applies immediately.</small></label>
+      <div class="s-test"><span id="s-ext-copies" role="status"></span></div>
+      <details><summary>Custom extension build</summary>
+        <label class="s-field"><span>Extra extension ID</span><input data-k="extension.store_id" spellcheck="false" placeholder="32 letters (only for a build you signed yourself)"><small>The Chrome Web Store copy and the zip/unpacked build are accepted automatically; this is only for a copy signed with your own key. Applies immediately.</small></label>
+      </details>
       <small class="s-note">When the extension files change, SIP Phone saves a new zip to Downloads and the extension asks you to drop it again. Alternative: "Load unpacked" with the folder <code id="s-ext-folder"></code> — that copy updates itself.</small>
       <div class="s-test" style="margin-top:10px"><span id="s-bridge" role="status"></span><button type="button" id="s-bridge-fix" hidden>Connect now</button></div>
       <div class="s-upd-msg" id="s-ext-msg"></div>
@@ -1513,6 +1516,11 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
         : !b.exe_ok ? 'Browser link: the bridge program is missing — reinstall SIP Phone.'
         : b.can_register ? 'Browser link: not registered yet.' : 'Browser link: needs Install.bat once (this Python can\u2019t write the registry).';
       $('s-bridge-fix').hidden = b.registered || !b.can_register || !b.exe_ok;
+      const c = x.connected, known = (x.known || []).map(k => k.kind).join(' and ');
+      const age = c && c.at ? Math.round(Date.now() / 1000 - c.at) : null;
+      $('s-ext-copies').textContent = c && c.id
+        ? `Connected: the ${c.kind || 'extension'} copy (${c.id.slice(0, 6)}…)` + (age > 120 ? `, last seen ${Math.round(age / 60)} min ago` : '') + `. Accepted automatically: ${known}.`
+        : `Accepted automatically: ${known}. No extension has connected since this start.`;
     }).catch(() => {});
     showRestart(sData.restart_pending);
     $('s-test-msg').textContent = ''; $('s-test-msg').className = '';

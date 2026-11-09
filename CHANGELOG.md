@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.7 — 2026-11-08
+- Settings → Browser extension no longer asks for a store ID. Both copies of
+  the extension (Chrome Web Store, zip/unpacked build) are accepted
+  automatically; the bridge tells the app which copy launched it, and
+  Settings shows "Connected: the Chrome Web Store copy". An "Extra extension
+  ID" field remains under *Custom extension build* for self-signed copies.
+  Extension files unchanged — no store upload needed.
+
 ## 2.4.6 — 2026-11-08
 - The Chrome Web Store listing's ID (`kghndilnhefammdeabhnjlphlmeeomno`) is
   built into the bridge allow-list, and `Install.bat` now opens the store page
