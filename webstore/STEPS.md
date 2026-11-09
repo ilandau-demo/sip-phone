@@ -5,7 +5,7 @@ Everything referenced here is in this folder (`webstore/`) of the
 
 | File | Use |
 |---|---|
-| `sip-phone-extension-2.4.6-webstore.zip` | the package you upload |
+| `sip-phone-extension-2.4.7-webstore.zip` | the package you upload |
 | `screenshot-1-phone-1280x800.png`, `screenshot-2-presence-1280x800.png` | listing screenshots |
 | `promo-tile-440x280.png` | optional promo tile |
 | `LISTING.txt` | text to paste into the store forms |
@@ -24,7 +24,7 @@ zone → Change visibility → Public). The URL to give the store is:
 2. Accept the developer agreement, pay the one-time $5 fee, verify the email.
 
 ## 3. Upload and fill in the listing (about 15 minutes)
-1. **+ New item** → upload `sip-phone-extension-2.4.6-webstore.zip`.
+1. **+ New item** → upload `sip-phone-extension-2.4.7-webstore.zip`.
 2. **Store listing** tab (copy from `LISTING.txt`): Name, Summary, Description;
    category *Productivity → Communication*; language *English (US)*; upload
    the two screenshots.
