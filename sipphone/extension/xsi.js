@@ -97,7 +97,6 @@ function statusOf(t) {
   if (t.hook.toLowerCase() === 'off-hook') return 'on-call';
   if (t.dnd) return 'dnd';
   if (t.monitor !== 'ok' || !t.synced) return 'unknown';
-  if (t.registered === false) return 'offline';
   return 'available';
 }
 const STATE_LABELS = { available: 'Available', ringing: 'Ringing', dialing: 'Calling out', 'on-call': 'On a call', 'on-hold': 'On hold', dnd: 'Do Not Disturb', offline: 'Offline', unknown: 'Unknown' };

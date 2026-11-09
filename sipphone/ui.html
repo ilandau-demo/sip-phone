@@ -169,9 +169,15 @@
   .pd-fields dd.muted { color: var(--ink-3); }
   .pd-watch { border-top: 1px solid var(--rule); padding-top: 10px; margin-bottom: 8px; }
   .pd-watch-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .pd-watch-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 4px; }
-  .pd-watch label.check, .pd-watch-opts label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; margin: 0; }
-  .pd-watch input { width: auto; }
+  .pd-watch-title { margin-bottom: 6px; }
+  .pd-watch-opts { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  #pdlg label.wopt { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; margin: 0; padding: 7px 8px;
+    border-radius: 8px; font-size: 14px; color: var(--ink); cursor: pointer; text-align: left; }
+  #pdlg label.wopt:hover { background: var(--bench); }
+  #pdlg label.wopt input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--line); }
+  #pdlg label.wopt.on { background: var(--line-soft); }
+  #pdlg label.wsound { border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 10px; color: var(--ink-2); font-size: 13px; }
+  .pd-watch-note { font-size: 12px; color: var(--ink-3); padding: 2px 8px 0; }
   #pd-acts { display: flex; gap: 6px; }
   #pd-acts button { font-size: 13px; padding: 6px 12px; border-radius: 8px; background: var(--line-soft); color: var(--line); font-weight: 600; }
   .toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
@@ -571,9 +577,10 @@
     <div class="pd-head"><span class="dot2" id="pd-dot"></span><div><div class="pd-name" id="pd-name"></div><div class="pd-state" id="pd-state"></div></div></div>
     <dl class="pd-fields" id="pd-fields"></dl>
     <div class="pd-watch">
-      <div class="pd-watch-title">Notify me when this person…</div>
-      <div id="pd-watch-opts" class="pd-watch-opts"></div>
-      <label class="check"><input type="checkbox" id="pd-watch-sound" checked><span>Play a sound</span></label>
+      <div class="pd-watch-title">Alert me when <span id="pd-watch-who">this person</span>…</div>
+      <div id="pd-watch-opts" class="pd-watch-opts" role="group" aria-label="Alerts"></div>
+      <label class="wopt wsound"><input type="checkbox" id="pd-watch-sound" checked><span>Play a sound with the alert</span></label>
+      <div class="pd-watch-note" id="pd-watch-note">Each alert shows once, then turns itself off.</div>
     </div>
     <div class="row"><span id="pd-acts"></span><span><button value="close">Close</button></span></div>
   </form>
@@ -1049,7 +1056,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const STATUS = {available:['available','Available'], idle:['available','Available'], 'on-call':['oncall','On a call'], 'on-hold':['onhold','On hold'],
                   ringing:['ringing','Ringing'], dialing:['dialing','Calling out'], dnd:['dnd','Do Not Disturb'],
                   offline:['offline','Offline'], error:['error','Unavailable'], unknown:['unknown','Unknown']};
-  const FILTERS = [['available','Available'], ['ringing','Ringing'], ['on-call','On a call'], ['on-hold','On hold'], ['dnd','DND'], ['offline','Offline'], ['unknown','Unknown']];
+  const FILTERS = [['available','Available'], ['ringing','Ringing'], ['on-call','On a call'], ['on-hold','On hold'], ['dnd','DND'], ['unknown','Unknown']];
   let teamQ = '', teamStatuses = new Set(), teamDept = '', teamKinds = new Set();
   try { const sv = JSON.parse(sessionStorage.getItem('sipphone.teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; teamKinds = new Set(sv.kinds || []); } catch (e) {}
   const saveFilter = () => { try { sessionStorage.setItem('sipphone.teamfilter', JSON.stringify({q: teamQ, statuses: [...teamStatuses], dept: teamDept, kinds: [...teamKinds]})); } catch (e) {} };
@@ -1353,7 +1360,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     label: g => (g.renamed ? `${g.name} (${g.id})` : g.id) + ` · ${g.members} ${g.members === 1 ? 'person' : 'people'}`});
   const loadGroupNames = () => { loadServiceNames(); loadOrgNames(); };
   // ---- person details + availability notifications ----
-  const WATCH_EVENTS = [['available', 'becomes available'], ['after-call', 'finishes a call'], ['busy', 'goes on a call'], ['dnd', 'turns on Do Not Disturb'], ['offline', 'goes offline']];
+  const WATCH_EVENTS = [['available', 'Becomes available'], ['after-call', 'Finishes a call'], ['busy', 'Goes on a call'], ['dnd', 'Turns on Do Not Disturb']];
   let pdUser = null;
   const loadWatch = async () => { try { watchRules = (await (await fetch('/api/presence/watch')).json()).rules || {}; } catch (e) {} };
   const openPerson = async (uid, focusWatch) => {
@@ -1371,13 +1378,16 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     add('Extension', p.extension); add('Number', p.number && p.number !== p.extension ? p.number : ''); add('Mobile', p.mobile);
     add('Department', p.department); add('Title', p.title); add('Email', p.email); add('Location', p.location); add('Group', p.group);
     add('Do Not Disturb', p.dnd ? 'On' : 'Off');
-    if (p.registered === false) add('Registered', 'No device registered'); else if (p.registered) add('Registered', 'Yes');
     add('Last update', p.last_update ? relTime(p.last_update) + ' ago' : (p.monitor === 'ok' ? 'waiting for the first event' : ''), !p.last_update);
     add('User ID', p.user_id);
     const rule = watchRules[p.user_id] || {events: []};
     const opts = $('pd-watch-opts'); opts.innerHTML = '';
-    for (const [k, txt] of WATCH_EVENTS) { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = rule.events.includes(k); const sp = document.createElement('span'); sp.textContent = txt; l.append(c, sp); opts.appendChild(l); }
+    $('pd-watch-who').textContent = (p.first || p.name || 'this person');
+    const syncWatch = () => { opts.querySelectorAll('label.wopt').forEach(l => l.classList.toggle('on', l.firstChild.checked));
+      const any = !!opts.querySelector('input:checked'); $('pd-watch-sound').disabled = !any; $('pd-watch-sound').parentNode.style.opacity = any ? '' : '.5'; };
+    for (const [k, txt] of WATCH_EVENTS) { const l = document.createElement('label'); l.className = 'wopt'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = rule.events.includes(k); c.onchange = syncWatch; const sp = document.createElement('span'); sp.textContent = txt; l.append(c, sp); opts.appendChild(l); }
     $('pd-watch-sound').checked = rule.sound !== false;
+    syncWatch();
     const acts = $('pd-acts'); acts.innerHTML = '';
     const num = p.number || p.extension;
     if (!presenceMode && num && p.monitor !== 'none') {

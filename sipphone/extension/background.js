@@ -235,7 +235,6 @@ async function judgeTransitions(snap) {
     if (ev.has('after-call') && u.status === 'available' && CALLISH.includes(old)) fired.push('after-call');
     if (ev.has('busy') && CALLISH.includes(u.status) && !CALLISH.includes(old)) fired.push('busy');
     if (ev.has('dnd') && u.status === 'dnd') fired.push('dnd');
-    if (ev.has('offline') && u.status === 'offline') fired.push('offline');
     for (const e of fired) {
       const key = u.user_id + ':' + e;
       if (Date.now() - (lastFired.get(key) || 0) < 20000) continue;

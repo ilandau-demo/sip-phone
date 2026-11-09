@@ -54,6 +54,14 @@
   name such as "Arizona": Settings → Team view → *Group display names* lists
   every group with its member count. Saved in `org-group-names.json`; shown
   in details and searchable.
+- **No Offline state.** Someone with no device registered shows Available;
+  the Offline filter and the "goes offline" alert are gone, and the 5-minute
+  registration sweep is off by default (`[admin] registration_sweep = true`
+  turns it back on, it no longer changes the status).
+- **Cleaner alerts.** A person's details now read "Alert me when Alice…" with
+  one option per line (Becomes available / Finishes a call / Goes on a call /
+  Turns on Do Not Disturb), a separate "Play a sound with the alert", and a
+  note that each alert fires once. Same in the extension's Team view.
 - Fix: the status dot in a person's details was always grey; it now uses the
   status colour (green Available, amber on a call, red ringing/DND).
 - Example config cleaned of the retired BLF options.

@@ -87,7 +87,12 @@ dialog.person-dlg::backdrop { background: rgba(0,0,0,.35); }
 .pd-fields dt { color: #51656B; } .pd-fields dd { margin: 0; overflow-wrap: anywhere; }
 .pd-watch { border-top: 1px solid #CFD7D2; padding-top: 10px; }
 .pd-watch-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.pd-watch-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 4px; }
-.pd-watch label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.pd-watch-opts { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+#pdlg label.wopt { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; margin: 0;
+  padding: 7px 8px; border-radius: 8px; font-size: 14px; cursor: pointer; text-align: left; }
+#pdlg label.wopt:hover { background: #EEF2EF; }
+#pdlg label.wopt input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--line); }
+#pdlg label.wsound { border-top: 1px solid #CFD7D2; border-radius: 0; margin-top: 2px; padding-top: 10px; font-size: 13px; color: #5C6B70; }
+.pd-watch-note { font-size: 12px; color: #8A9A9E; padding: 2px 8px 0; }
 dialog.person-dlg .row { display: flex; justify-content: space-between; margin-top: 12px; }
 dialog.person-dlg button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 7px 14px; background: var(--line); color: #fff; cursor: pointer; }

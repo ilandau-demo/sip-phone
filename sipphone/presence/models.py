@@ -88,8 +88,7 @@ def status_of(t: Target) -> str:
         return "dnd"
     if t.monitor in (MONITOR_REFUSED, MONITOR_ERROR, MONITOR_PENDING) or not t.synced:
         return "unknown"
-    if t.registered is False:
-        return "offline"
+    # no Offline state: a person with no device registered still shows Available
     return "available"
 
 

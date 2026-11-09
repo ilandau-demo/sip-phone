@@ -18,7 +18,6 @@ log = logging.getLogger("sipphone.presence")
 EVENTS = {
     "available": "becomes available",
     "after-call": "becomes available after a call",
-    "offline": "goes offline",
     "dnd": "turns on Do Not Disturb",
     "busy": "goes on a call",
 }
@@ -92,8 +91,6 @@ class AvailabilityWatcher:
             fired.append("available")
         if "after-call" in ev and new == "available" and old in CALLISH:
             fired.append("after-call")
-        if "offline" in ev and new == "offline":
-            fired.append("offline")
         if "dnd" in ev and new == "dnd":
             fired.append("dnd")
         if "busy" in ev and new in CALLISH and old not in CALLISH:

@@ -45,8 +45,8 @@ const SERVICE_TYPES = [['hunt_group', 'Hunt groups'], ['call_center', 'Call cent
 const teamCfg = async () => (await chrome.storage.local.get('teamOnly')).teamOnly || null;
 const STATUS = { available: ['available', 'Available'], idle: ['available', 'Available'], 'on-call': ['oncall', 'On a call'], 'on-hold': ['onhold', 'On hold'], ringing: ['ringing', 'Ringing'],
   dialing: ['dialing', 'Calling out'], dnd: ['dnd', 'Do Not Disturb'], offline: ['offline', 'Offline'], error: ['error', 'Unavailable'], unknown: ['unknown', 'Unknown'] };
-const FILTERS = [['available', 'Available'], ['ringing', 'Ringing'], ['on-call', 'On a call'], ['on-hold', 'On hold'], ['dnd', 'DND'], ['offline', 'Offline'], ['unknown', 'Unknown']];
-const WATCH_EVENTS = [['available', 'becomes available'], ['after-call', 'finishes a call'], ['busy', 'goes on a call'], ['dnd', 'turns on Do Not Disturb'], ['offline', 'goes offline']];
+const FILTERS = [['available', 'Available'], ['ringing', 'Ringing'], ['on-call', 'On a call'], ['on-hold', 'On hold'], ['dnd', 'DND'], ['unknown', 'Unknown']];
+const WATCH_EVENTS = [['available', 'Becomes available'], ['after-call', 'Finishes a call'], ['busy', 'Goes on a call'], ['dnd', 'Turns on Do Not Disturb']];
 let teamQ = '', teamStatuses = new Set(), teamDept = '', teamSig = '', lastSnap = null, watchRules = {};
 try { const sv = JSON.parse(sessionStorage.getItem('teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; } catch (e) {}
 const saveFilter = () => { try { sessionStorage.setItem('teamfilter', JSON.stringify({ q: teamQ, statuses: [...teamStatuses], dept: teamDept })); } catch (e) {} };
@@ -167,7 +167,7 @@ function openPerson(p, focusWatch) {
   add('Do Not Disturb', p.dnd ? 'On' : 'Off'); add('Last update', p.last_update ? relTime(p.last_update) + ' ago' : ''); add('User ID', p.user_id);
   const rule = watchRules[p.user_id] || { events: [] };
   const opts = $('pd-watch-opts'); opts.innerHTML = '';
-  for (const [k, txt] of WATCH_EVENTS) { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = rule.events.includes(k); const sp = document.createElement('span'); sp.textContent = txt; l.append(c, sp); opts.appendChild(l); }
+  for (const [k, txt] of WATCH_EVENTS) { const l = document.createElement('label'); l.className = 'wopt'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = rule.events.includes(k); const sp = document.createElement('span'); sp.textContent = txt; l.append(c, sp); opts.appendChild(l); }
   $('pd-watch-sound').checked = rule.sound !== false;
   $('pdlg').showModal();
   if (focusWatch) { const f = opts.querySelector('input'); if (f) f.focus(); }

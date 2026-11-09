@@ -63,7 +63,7 @@ WHAT TO FILL IN
       watch; anyone it refuses shows as "Unknown - not monitored" rather than
       available. Click Check, then Save. The Team tab appears and updates live.
       Or "Admin XSI login": the same live engine with an admin account, which
-      also shows Offline (no device registered). The admin password never
+      sees everyone in the group. The admin password never
       leaves this app.
       Only people get presence; tick "Also list as speed dials" to show hunt
       groups, queues, auto attendants etc. as click-to-call entries.

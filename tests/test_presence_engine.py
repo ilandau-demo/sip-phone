@@ -92,17 +92,18 @@ class EngineTests(unittest.TestCase):
         mon2 = PresenceManager(user_creds(self.mock), cache_path=os.path.join(self.d, "dir.json"))
         self.assertEqual(mon2.directory.status()["people"], 3); self.assertTrue(mon2.directory.from_cache)
 
-    def test_admin_login_same_engine_with_offline(self):
+    def test_admin_login_same_engine_no_offline(self):
         self.mock.registrations[ALICE] = 0
         pm.REGISTRATION_SWEEP = 0.5
         try:
             creds = AdminCredentials(ADMIN, APW, host=self.mock.base, verify_tls=False, directory_user="me1001")
-            mon = PresenceManager(creds, concurrency=2)
+            mon = PresenceManager(creds, concurrency=2, registration_sweep=True)
             mon.start()
             self.assertTrue(wait(lambda: mon.snapshot()["ready"] and self.by_name(mon).get("Bob Brown", {}).get("status") == "on-call"))
             self.assertEqual(mon.snapshot()["login"], "admin")
-            self.assertTrue(wait(lambda: self.by_name(mon)["Alice Adams"]["status"] == "offline", 6))   # no registrations
-            self.assertEqual(self.by_name(mon)["Bob Brown"]["status"], "on-call")                       # a call beats offline
+            time.sleep(1.5)                                                         # a sweep has run
+            self.assertEqual(self.by_name(mon)["Alice Adams"]["status"], "available")   # no device registered: still Available
+            self.assertEqual(self.by_name(mon)["Bob Brown"]["status"], "on-call")
             self.assertTrue(mon.health()["registration_sweep"])
             mon.stop()
         finally:
