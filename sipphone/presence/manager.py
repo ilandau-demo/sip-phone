@@ -25,7 +25,7 @@ from .connection import EXPIRES, EventsClient
 from .directory import Directory
 from .event_processor import EventProcessor
 from .metrics import LatencyMetrics
-from .group_names import FILE_NAME as GROUP_NAMES_FILE, GroupNames
+from .group_names import FILE_NAME as GROUP_NAMES_FILE, ORG_FILE_NAME as ORG_GROUP_NAMES_FILE, GroupNames
 from .models import (BUSY, MONITOR_ERROR, MONITOR_OK, MONITOR_PENDING, MONITOR_REFUSED, STATE_LABELS, MonitoredUser,
                      Target, person_dict, sort_people, status_of)
 from .subscriptions import SubscriptionManager
@@ -95,6 +95,8 @@ class PresenceManager:
         self.listeners: List[ChangeListener] = []
         self.update_listeners: List[UpdateListener] = []
         self.group_names = GroupNames(os.path.join(os.path.dirname(cache_path), GROUP_NAMES_FILE) if cache_path else "")
+        # display names for the BroadWorks group a person belongs to (e.g. "3149647G" → "Arizona")
+        self.org_group_names = GroupNames(os.path.join(os.path.dirname(cache_path), ORG_GROUP_NAMES_FILE) if cache_path else "")
         self.metrics = LatencyMetrics()
         self.channels_wanted = max(0, min(MAX_CHANNELS, int(channels or 0)))   # 0 = automatic
         self.channels_open = 0
@@ -126,6 +128,26 @@ class PresenceManager:
             shown = {x.user_id for x in self.directory.services}
             found = [dict(x.to_dict(), shown=x.user_id in shown) for x in self.directory.entries if getattr(x, "kind", "")]
         return self.group_names.apply(found)
+
+    def org_groups(self) -> List[dict]:
+        """The groups people belong to (the directory's group ID), with how many
+        people each has and any display name."""
+        names = self.org_group_names.all()
+        counts: Dict[str, int] = {}
+        with self._lock:
+            for x in self.directory.entries:
+                g = (getattr(x, "group", "") or "").strip()
+                if g and not getattr(x, "kind", ""):
+                    counts[g] = counts.get(g, 0) + 1
+        out = [{"id": g, "name": names.get(g, g), "original_name": g, "renamed": g in names, "members": n}
+               for g, n in counts.items()]
+        out.sort(key=lambda x: x["name"].lower())
+        return out
+
+    def rename_org_group(self, group_id: str, name: str) -> Dict[str, str]:
+        names = self.org_group_names.set(group_id, name)
+        self._notify_update()
+        return names
 
     def rename_group(self, user_id: str, name: str) -> Dict[str, str]:
         names = self.group_names.set(user_id, name)
@@ -466,8 +488,10 @@ class PresenceManager:
                 t = next((x for x in self.targets.values() if x.user.user_id.lower().split("@")[0] == short), None)
             if t is None:
                 d = self.directory.find(user_id)
-                return None if d is None else dict(d.to_dict(), monitor="none", stale=False, state_label="Unknown")
+                return None if d is None else self.org_group_names.apply_people(
+                    [dict(d.to_dict(), monitor="none", stale=False, state_label="Unknown")])[0]
             d = person_dict(t, self.is_stale())
+            self.org_group_names.apply_people([d])
             d["calls"] = [{"call_id": c.call_id, "state": c.state, "personality": c.personality, "name": c.name,
                            "number": c.number, "start": c.start} for c in t.calls.values()]
             d["subscriptions"] = dict(t.subs)
@@ -505,6 +529,7 @@ class PresenceManager:
         sort_people(out)
         active = sum(1 for u in out if u["status"] in BUSY)
         self.group_names.apply(services)
+        self.org_group_names.apply_people(out)
         return {"users": out, "services": services, "ready": ready, "last_poll": last, "last_error": err, "active": active,
                 "total": len(out), "source": "events", "login": self.kind, "connected": connected, "stale": stale,
                 "list_source": self.list_source, "refused": refused, "ack_error": self.ack_error,

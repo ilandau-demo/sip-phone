@@ -42,14 +42,20 @@
   names the channel and server in the log and reopens at once.
 - In-app updates reinstall a rebuilt wheel that has the version already
   installed (pip alone reports "already installed" and changes nothing).
-- **Groups: filter and rename.** The Team tab has a chip per group kind
-  (Hunt groups, Call centers / queues, Auto attendants …) with counts; a group
-  chip alone shows just those groups, with a status chip people too, and the
-  search works inside it. Settings → Team view → *Group display names*: pick
-  any group the directory found from the drop-down, type the name to show
-  instead of its ID, Save (or *Use directory name* to undo). Names live in
-  `group-names.json` beside the directory cache and apply to the Team tab,
-  boards, speed dials, transfer and search, pushed live.
+- **Services: filter and rename.** The Team tab has a chip per service kind
+  (Hunt groups, Call centers / queues, Auto attendants …) with counts; a
+  service chip alone shows just those services, with a status chip people too,
+  and the search works inside it. Settings → Team view → *Service display
+  names*: pick any service the directory found, type the name to show instead
+  of its ID, Save (or *Use directory name*). Saved in `group-names.json`;
+  applies to the Team tab, boards, speed dials, transfer and search, live.
+- **Group display names.** The group a person belongs to (the directory's
+  group ID, e.g. 3149647G, shown as *Group* in their details) can be given a
+  name such as "Arizona": Settings → Team view → *Group display names* lists
+  every group with its member count. Saved in `org-group-names.json`; shown
+  in details and searchable.
+- Fix: the status dot in a person's details was always grey; it now uses the
+  status colour (green Available, amber on a call, red ringing/DND).
 - Example config cleaned of the retired BLF options.
 - Extension files unchanged — the store package is a version bump only.
 

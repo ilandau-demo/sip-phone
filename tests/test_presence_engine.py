@@ -418,3 +418,26 @@ class GroupNameTests(unittest.TestCase):
         finally:
             mon.stop(); mock.stop()
             shutil.rmtree(d, ignore_errors=True)
+
+
+class OrgGroupNameTests(unittest.TestCase):
+    def test_people_group_id_gets_a_display_name(self):
+        d = tempfile.mkdtemp()
+        mock = MockXsi(TEAM); mock.groups = {ALICE: "3149647G", BOB: "3149647G", CAROL: "5550001G"}
+        mon = PresenceManager(user_creds(mock), cache_path=os.path.join(d, "directory-cache.json"))
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+            g = {x["id"]: x for x in mon.org_groups()}
+            self.assertEqual(g["3149647G"]["members"], 2); self.assertFalse(g["3149647G"]["renamed"])
+            mon.rename_org_group("3149647G", "Arizona")
+            users = {u["user_id"]: u for u in mon.snapshot()["users"]}
+            self.assertEqual(users[ALICE]["group"], "Arizona"); self.assertEqual(users[ALICE]["group_id"], "3149647G")
+            self.assertEqual(users[CAROL]["group"], "5550001G")
+            self.assertEqual(mon.person(BOB)["group"], "Arizona")
+            from sipphone.presence.search import search_people
+            self.assertEqual({u["user_id"] for u in search_people(mon.snapshot()["users"], "arizona")}, {ALICE, BOB})
+            mon.rename_org_group("3149647G", "")
+            self.assertEqual({u["user_id"]: u for u in mon.snapshot()["users"]}[ALICE]["group"], "3149647G")
+        finally:
+            mon.stop(); mock.stop(); shutil.rmtree(d, ignore_errors=True)

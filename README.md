@@ -81,10 +81,11 @@ footer shows "updates in 0.4 s (p95; platform 0.3 s)" and
 `/api/presence/health` carries `latency` (platform / engine / ack_rtt /
 render) and `channels`. If the stream drops the page polls until it is back.
 
-**Groups** (hunt groups, call centers, auto attendants…) appear as click-to-call
+**Services** (hunt groups, call centers, auto attendants…) appear as click-to-call
 entries under their kind, with a filter chip per kind on the Team tab. Settings →
-Team view → *Group display names* gives any group a friendly name instead of its
-ID (`group-names.json`).
+Team view → *Service display names* gives any service a friendly name instead of
+its ID (`group-names.json`); *Group display names* does the same for the group a
+person belongs to, e.g. 3149647G → Arizona (`org-group-names.json`).
 
 Two logins, one engine (`sipphone/presence/`):
 

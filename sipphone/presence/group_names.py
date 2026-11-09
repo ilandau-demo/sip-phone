@@ -13,7 +13,8 @@ import os
 import threading
 from typing import Dict
 
-FILE_NAME = "group-names.json"
+FILE_NAME = "group-names.json"            # services (hunt groups, call centers, ...) by user ID
+ORG_FILE_NAME = "org-group-names.json"    # the group a person belongs to, by group ID
 MAX_LEN = 80
 
 
@@ -55,7 +56,7 @@ class GroupNames:
         """Set a display name; an empty name goes back to the directory's."""
         user_id = (user_id or "").strip()
         if not user_id:
-            raise ValueError("user_id required")
+            raise ValueError("an ID is required")
         name = " ".join((name or "").split())[:MAX_LEN]
         with self._lock:
             self._reload()
@@ -83,3 +84,15 @@ class GroupNames:
                 d["renamed"] = True
         services.sort(key=lambda x: (x.get("kind", ""), (x.get("name") or "").lower()))
         return services
+
+    def apply_people(self, people: list) -> list:
+        """Person dicts with the group ID replaced by its display name
+        (the ID kept as ``group_id``)."""
+        names = self.all()
+        for d in people:
+            g = d.get("group") or ""
+            if g:
+                d["group_id"] = g
+                if g in names:
+                    d["group"] = names[g]
+        return people

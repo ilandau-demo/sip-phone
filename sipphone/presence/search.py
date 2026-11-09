@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Optional
 
-FIELDS = ("name", "first", "last", "extension", "number", "department", "title", "email", "location", "user_id")
+FIELDS = ("name", "first", "last", "extension", "number", "department", "title", "email", "location", "group", "user_id")
 
 
 def _norm(s: str) -> str:

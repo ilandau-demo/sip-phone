@@ -58,6 +58,7 @@ class MockXsi:
         self.ack_delay = 0.0                      # simulated server-side time per ack
         self.max_channels = 0                     # 0 = unlimited; else refuse more (HTTP 409)
         self.waiting_ack = {}                     # channelId -> eventID awaiting ack
+        self.groups = {}                          # userId -> groupId in the directory
         self.sticky_cookie = False                # like a balanced Xsp cluster: heartbeats without the
                                                   # node cookie land on a server that doesn't know the channel
         self.acked = set()
@@ -136,7 +137,9 @@ class MockXsi:
                     return self._xml(f'<ErrorInfo xmlns="{XSI}"><summary>BLF access is not used</summary></ErrorInfo>', 403)
                 if re.match(r"/com\.broadsoft\.xsi-actions/v2\.0/user/[^/]+/directories/Enterprise", self.path):
                     items = "".join(f"<directoryDetails><userId>{u}</userId><firstName>{f}</firstName><lastName>{l}</lastName>"
-                                    f"<extension>{e}</extension><department>Sales</department></directoryDetails>"
+                                    f"<extension>{e}</extension><department>Sales</department>"
+                                    + (f"<groupId>{mock.groups[u]}</groupId>" if u in mock.groups else "")
+                                    + "</directoryDetails>"
                                     for u, f, l, e in mock.directory)
                     return self._xml(f'<Enterprise xmlns="{XSI}"><enterpriseDirectory>{items}</enterpriseDirectory></Enterprise>')
                 self._xml("<nope/>", 404)

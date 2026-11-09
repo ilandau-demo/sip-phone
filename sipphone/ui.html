@@ -153,10 +153,10 @@
   .team-list .empty { color: var(--ink-2); font-size: 13px; padding: 20px 6px; text-align: center; }
   mark { background: var(--ring-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
   .teammate .nm2 { cursor: pointer; }
-  .teammate.stale .dot2 { opacity: .35; }
+  .teammate.stale .dot2, .pd-head .dot2.stale { opacity: .35; }
   .teammate.stale .st2::after { content: ' · stale'; color: var(--ink-3); }
-  .teammate.offline .dot2 { background: var(--ink-3); opacity: .5; }
-  .teammate.unknown .dot2 { background: transparent; border: 2px solid var(--ink-3); box-sizing: border-box; }
+  .teammate.offline .dot2, .pd-head .dot2.offline { background: var(--ink-3); opacity: .5; }
+  .teammate.unknown .dot2, .pd-head .dot2.unknown { background: transparent; border: 2px solid var(--ink-3); box-sizing: border-box; }
   .teammate .acts .tbtn.bell { visibility: visible; color: var(--ink-3); padding: 4px 6px; }
   .teammate .acts .tbtn.bell.on { color: var(--ring); }
   dialog.person-dlg { width: min(400px, 94vw); }
@@ -183,13 +183,14 @@
   .teammate { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; padding: 8px 4px 8px 6px; border-radius: 8px; }
   .teammate:hover { background: var(--bench); }
   .teammate .dot2 { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
-  .teammate.available .dot2 { background: var(--line); box-shadow: 0 0 0 3px var(--line-soft); }
-  .teammate.oncall .dot2, .teammate.onhold .dot2 { background: var(--ring); box-shadow: 0 0 0 3px var(--ring-soft); }
-  .teammate.ringing .dot2 { background: var(--hang); box-shadow: 0 0 0 3px var(--hang-soft); animation: flash .7s steps(1,end) infinite; }
-  .teammate.dialing .dot2 { background: var(--ring); animation: pulse 1s infinite; }
-  .teammate.dnd .dot2 { background: var(--hang); position: relative; }
-  .teammate.dnd .dot2::after { content: ''; position: absolute; left: -2px; right: -2px; top: 4px; height: 2px; background: #fff; transform: rotate(-45deg); border-radius: 2px; }
-  .teammate.error .dot2 { background: var(--ink-3); }
+  .teammate.available .dot2, .pd-head .dot2.available { background: var(--line); box-shadow: 0 0 0 3px var(--line-soft); }
+  .teammate.oncall .dot2, .teammate.onhold .dot2, .pd-head .dot2.oncall, .pd-head .dot2.onhold { background: var(--ring); box-shadow: 0 0 0 3px var(--ring-soft); }
+  .teammate.ringing .dot2, .pd-head .dot2.ringing { background: var(--hang); box-shadow: 0 0 0 3px var(--hang-soft); animation: flash .7s steps(1,end) infinite; }
+  .teammate.dialing .dot2, .pd-head .dot2.dialing { background: var(--ring); animation: pulse 1s infinite; }
+  .teammate.dnd .dot2, .pd-head .dot2.dnd { background: var(--hang); position: relative; }
+  .pd-head .dot2.dnd::after { top: 6px; }
+  .teammate.dnd .dot2::after, .pd-head .dot2.dnd::after { content: ''; position: absolute; left: -2px; right: -2px; top: 4px; height: 2px; background: #fff; transform: rotate(-45deg); border-radius: 2px; }
+  .teammate.error .dot2, .pd-head .dot2.error { background: var(--ink-3); }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
   @keyframes flash { 0% { opacity: 1; } 50% { opacity: .12; } 100% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) {
@@ -717,14 +718,22 @@
           <input type="hidden" data-k="admin.show_services">
           <div id="s-svc" class="s-svc"></div>
           <small>Only people get presence. Ticked service types appear in their own section of the Team tab as click-to-call entries; unticked ones are hidden.</small></div>
-        <div class="s-field" id="s-grp"><span>Group display names</span>
-          <select id="s-grp-pick" aria-label="Group to rename"><option value="">Choose a group…</option></select>
-          <div class="s-grp-row" id="s-grp-edit" hidden>
-            <input id="s-grp-name" spellcheck="false" maxlength="80" placeholder="Display name" aria-label="Display name">
-            <button type="button" id="s-grp-save">Save name</button>
-            <button type="button" class="link" id="s-grp-reset">Use directory name</button>
+        <div class="s-field" id="s-svn"><span>Service display names</span>
+          <select id="s-svn-pick" aria-label="Service to rename"><option value="">Choose a service…</option></select>
+          <div class="s-grp-row" id="s-svn-edit" hidden>
+            <input id="s-svn-name" spellcheck="false" maxlength="80" placeholder="Display name" aria-label="Service display name">
+            <button type="button" id="s-svn-save">Save name</button>
+            <button type="button" class="link" id="s-svn-reset">Use directory name</button>
           </div>
-          <small id="s-grp-msg" role="status">Groups the directory found (hunt groups, call centers, auto attendants…). Pick one and give it the name you want to see instead of its ID. Saved right away; applies to the Team tab, boards, speed dials and transfer.</small></div>
+          <small id="s-svn-msg" role="status">Services the directory found (hunt groups, call centers, auto attendants…). Pick one and give it the name you want to see instead of its ID. Saved right away; applies to the Team tab, boards, speed dials and transfer.</small></div>
+        <div class="s-field" id="s-org"><span>Group display names</span>
+          <select id="s-org-pick" aria-label="Group to rename"><option value="">Choose a group…</option></select>
+          <div class="s-grp-row" id="s-org-edit" hidden>
+            <input id="s-org-name" spellcheck="false" maxlength="80" placeholder="Display name" aria-label="Group display name">
+            <button type="button" id="s-org-save">Save name</button>
+            <button type="button" class="link" id="s-org-reset">Use group ID</button>
+          </div>
+          <small id="s-org-msg" role="status">The groups people belong to (shown as Group in a person's details, e.g. 3149647G). Give each the name you want to see, e.g. a site or region. Saved right away; also searchable.</small></div>
         <label class="s-field"><span>Hide from the list</span><input data-k="admin.hide_user" spellcheck="false" placeholder="Your own userId, extension or number"></label>
         <div class="s-test"><button type="button" id="s-test">Test connection</button><span id="s-test-msg" role="status"></span></div>
         <details><summary>More Team options</summary>
@@ -1045,7 +1054,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   try { const sv = JSON.parse(sessionStorage.getItem('sipphone.teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; teamKinds = new Set(sv.kinds || []); } catch (e) {}
   const saveFilter = () => { try { sessionStorage.setItem('sipphone.teamfilter', JSON.stringify({q: teamQ, statuses: [...teamStatuses], dept: teamDept, kinds: [...teamKinds]})); } catch (e) {} };
   const norm = x => (x || '').toString().toLowerCase();
-  const personMatches = (u, q) => { if (!q) return true; const hay = [u.name, u.first, u.last, u.extension, u.number, u.department, u.title, u.email, u.location, u.user_id].map(norm).join(' '); return q.split(/\s+/).filter(Boolean).every(t => hay.includes(t)); };
+  const personMatches = (u, q) => { if (!q) return true; const hay = [u.name, u.first, u.last, u.extension, u.number, u.department, u.title, u.email, u.location, u.group, u.user_id].map(norm).join(' '); return q.split(/\s+/).filter(Boolean).every(t => hay.includes(t)); };
   const hl = (el, text, q) => { el.textContent = ''; const terms = q.split(/\s+/).filter(Boolean); if (!terms.length) { el.textContent = text; return; }
     const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'ig');
     for (const part of text.split(re)) { if (!part) continue; const m = part.match(re); const node = m && m[0] === part ? document.createElement('mark') : document.createTextNode(''); if (node.nodeType === 1) { node.textContent = part; el.appendChild(node); } else el.appendChild(document.createTextNode(part)); } };
@@ -1291,48 +1300,58 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     foot.title = j.last_error ? '' : 'Open Settings → Team view → Check for connection details';
     box.appendChild(foot);
   };
-  // ---- group display names (Settings → Team view) ----
-  let grpList = [];
-  const grpLabel = g => (g.renamed ? `${g.name} (${g.original_name})` : g.name) + (g.extension || g.number ? ` · x${g.extension || g.number}` : '') + (g.shown ? '' : ' · not listed');
-  const fillGroups = keep => {
-    const pick = $('s-grp-pick'); pick.innerHTML = '';
-    const o = document.createElement('option'); o.value = ''; o.textContent = grpList.length ? 'Choose a group…' : 'No groups found yet'; pick.appendChild(o);
-    let lastKind = null, og = null;
-    for (const g of grpList) {
-      if (g.kind_label !== lastKind) { lastKind = g.kind_label; og = document.createElement('optgroup'); og.label = g.kind_label || 'Groups'; pick.appendChild(og); }
-      const op = document.createElement('option'); op.value = g.user_id; op.textContent = grpLabel(g); og.appendChild(op);
-    }
-    pick.disabled = !grpList.length;
-    pick.value = keep && grpList.some(g => g.user_id === keep) ? keep : '';
-    showGroup();
+  // ---- display names (Settings → Team view): services and people's groups ----
+  const makeNamer = ({p, url, key, choose, none, label, resetMsg}) => {
+    let list = [];
+    const pick = $(p + '-pick'), edit = $(p + '-edit'), nameIn = $(p + '-name'), msg = $(p + '-msg'), reset = $(p + '-reset');
+    const fill = keep => {
+      pick.innerHTML = '';
+      const o = document.createElement('option'); o.value = ''; o.textContent = list.length ? choose : none; pick.appendChild(o);
+      let lastKind = null, og = pick;
+      for (const g of list) {
+        if (g.kind_label !== undefined && g.kind_label !== lastKind) { lastKind = g.kind_label; og = document.createElement('optgroup'); og.label = g.kind_label || 'Services'; pick.appendChild(og); }
+        const op = document.createElement('option'); op.value = g[key]; op.textContent = label(g); og.appendChild(op);
+      }
+      pick.disabled = !list.length;
+      pick.value = keep && list.some(g => g[key] === keep) ? keep : '';
+      show();
+    };
+    const show = () => {
+      const g = list.find(x => x[key] === pick.value);
+      edit.hidden = !g;
+      if (!g) return;
+      nameIn.value = g.renamed ? g.name : '';
+      nameIn.placeholder = g.original_name || g[key];
+      reset.hidden = !g.renamed;
+      msg.textContent = g.id !== undefined ? `Group ID ${g.id} · ${g.members} ${g.members === 1 ? 'person' : 'people'}` : `Directory name: ${g.original_name || '—'} · ID ${g[key]}`;
+    };
+    const load = async () => {
+      try { const r = await (await fetch(url, {cache: 'no-store'})).json(); list = r.groups || []; } catch (e) { list = []; }
+      fill(pick.value);
+    };
+    const save = async name => {
+      const id = pick.value; if (!id) return;
+      try {
+        const r = await (await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({[key]: id, name})})).json();
+        if (r.error) { msg.textContent = r.error; return; }
+        list = r.groups || list; fill(id);
+        msg.textContent = name ? `Saved — shown as “${name}”.` : resetMsg;
+        teamSig = ''; lastTeam = null; loadTeam();
+      } catch (e) { msg.textContent = 'Couldn’t save — is the app running?'; }
+    };
+    pick.onchange = show;
+    $(p + '-save').onclick = () => save(nameIn.value.trim());
+    reset.onclick = () => save('');
+    nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $(p + '-save').click(); } });
+    return load;
   };
-  const showGroup = () => {
-    const g = grpList.find(x => x.user_id === $('s-grp-pick').value);
-    $('s-grp-edit').hidden = !g;
-    if (!g) return;
-    $('s-grp-name').value = g.renamed ? g.name : '';
-    $('s-grp-name').placeholder = g.original_name || g.user_id;
-    $('s-grp-reset').hidden = !g.renamed;
-    $('s-grp-msg').textContent = `Directory name: ${g.original_name || '—'} · ID ${g.user_id}`;
-  };
-  const loadGroupNames = async () => {
-    try { const r = await (await fetch('/api/presence/groups', {cache: 'no-store'})).json(); grpList = r.groups || []; } catch (e) { grpList = []; }
-    fillGroups($('s-grp-pick').value);
-  };
-  const saveGroupName = async name => {
-    const uid = $('s-grp-pick').value; if (!uid) return;
-    try {
-      const r = await (await fetch('/api/presence/groups', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: uid, name})})).json();
-      if (r.error) { $('s-grp-msg').textContent = r.error; return; }
-      grpList = r.groups || grpList; fillGroups(uid);
-      $('s-grp-msg').textContent = name ? `Saved — shown as “${name}”.` : 'Back to the directory name.';
-      teamSig = ''; lastTeam = null; loadTeam();
-    } catch (e) { $('s-grp-msg').textContent = 'Couldn’t save — is the app running?'; }
-  };
-  $('s-grp-pick').onchange = showGroup;
-  $('s-grp-save').onclick = () => saveGroupName($('s-grp-name').value.trim());
-  $('s-grp-reset').onclick = () => saveGroupName('');
-  $('s-grp-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('s-grp-save').click(); } });
+  const loadServiceNames = makeNamer({p: 's-svn', url: '/api/presence/groups', key: 'user_id', choose: 'Choose a service…', none: 'No services found yet',
+    resetMsg: 'Back to the directory name.',
+    label: g => (g.renamed ? `${g.name} (${g.original_name})` : g.name) + (g.extension || g.number ? ` · x${g.extension || g.number}` : '') + (g.shown ? '' : ' · not listed')});
+  const loadOrgNames = makeNamer({p: 's-org', url: '/api/presence/org-groups', key: 'id', choose: 'Choose a group…', none: 'No groups found yet',
+    resetMsg: 'Back to the group ID.',
+    label: g => (g.renamed ? `${g.name} (${g.id})` : g.id) + ` · ${g.members} ${g.members === 1 ? 'person' : 'people'}`});
+  const loadGroupNames = () => { loadServiceNames(); loadOrgNames(); };
   // ---- person details + availability notifications ----
   const WATCH_EVENTS = [['available', 'becomes available'], ['after-call', 'finishes a call'], ['busy', 'goes on a call'], ['dnd', 'turns on Do Not Disturb'], ['offline', 'goes offline']];
   let pdUser = null;
