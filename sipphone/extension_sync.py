@@ -36,14 +36,14 @@ from . import __version__
 log = logging.getLogger("sipphone.extension")
 
 FOLDER_NAME = "SIP Phone Extension"
-ZIP_BASENAME = "sip-phone-extension"
+ZIP_BASENAME = "telvoro-extension"
 SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extension")
 MARKER = "install.json"
 
 README = f"""SIP PHONE - CHROME / EDGE EXTENSION
 ===================================
 
-This folder is the Nextiva Companion App browser extension. The Nextiva Companion desktop app keeps it up
+This folder is the Telvoro browser extension. The Telvoro desktop app keeps it up
 to date automatically - don't edit or move it.
 
 Add it to Chrome once:
@@ -51,9 +51,9 @@ Add it to Chrome once:
   2. Turn on "Developer mode"
   3. Click "Load unpacked" and choose THIS folder:
        {{path}}
-  4. Pin "Nextiva Companion App" from the puzzle-piece menu.
+  4. Pin "Telvoro" from the puzzle-piece menu.
 
-After that, updating the Nextiva Companion desktop app also updates the extension - it reloads
+After that, updating the Telvoro desktop app also updates the extension - it reloads
 itself the next time the app runs. Nothing else to do.
 
 (Alternative: drag the zip that "python -m sipphone --extension" saves to your
@@ -264,7 +264,7 @@ def guide() -> int:
     print("\nOne-time setup in Chrome (or Edge) - either way:")
     print("  A. Turn on Developer mode on the extensions page, then DRAG the zip onto that page.")
     print("  B. Or click Load unpacked and paste the folder path (it's on your clipboard).")
-    print("  Then pin Nextiva Companion App from the puzzle-piece menu.")
+    print("  Then pin Telvoro from the puzzle-piece menu.")
     print("Updates: the folder reloads itself; a zip install gets a notification with a new zip in Downloads.")
     if sys.platform == "win32":
         try:

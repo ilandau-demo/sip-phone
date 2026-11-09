@@ -1,28 +1,28 @@
-# Nextiva Companion App — softphone, team presence and browser extension for Nextiva
+# Telvoro - Presence & SIP Phone — an independent softphone, team presence and browser extension designed to work with Nextiva
 
 ## Get started (for people who just want to use it)
 
-**Team view only (no install):** add the **Nextiva Companion App** extension from the
+**Team view only (no install):** add the **Telvoro** extension from the
 [Chrome Web Store](https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno) → click its icon → *Just show my team* → enter your Nextiva
 user login. Presence streams straight into the browser's side panel. Nothing
 else to install.
 
 **Phone + Team view (calls, text-to-speech, transcript) — Windows, 3 steps:**
 
-1. Download the latest `SIP-Phone-<version>.zip` from the
+1. Download the latest `Telvoro-<version>.zip` from the
    [`releases/`](releases/) folder of this repo (open the newest version
    folder, click the zip, then **Download**).
 2. Right-click the zip → *Extract All*, open the extracted folder and
    double-click **`Install.bat`**. Answer its questions (Enter = default). If
    Windows shows "Windows protected your PC", choose *More info → Run anyway*.
    No Python on the PC? The installer offers to install it.
-3. Nextiva Companion App opens in your browser on its Settings screen. Choose **Phone +
+3. Telvoro opens in your browser on its Settings screen. Choose **Phone +
    Team view**, fill in **Settings → Phone line** with the device details from
    NextOS (*Voice & Analytics → Users → Manage Users → (user) → Device*, device
    type **Generic SIP Phone**: SIP Username, Authentication Name, Password,
    Domain), click **Save**. The header changes to "*you* is registered".
 
-Then start it from **Nextiva Companion App** in the Start menu (right-click → *Pin to
+Then start it from **Telvoro** in the Start menu (right-click → *Pin to
 Start*). The browser extension connects to the running app by itself — install
 it from the [Chrome Web Store](https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno) (or `Install.bat` sets it up) and the side panel
 shows the phone instead of just the team board.
@@ -57,7 +57,7 @@ instead.
 ```powershell
 python -m sipphone --install-shortcut
 ```
-adds **Nextiva Companion App** to the Start menu (it launches `pythonw -m sipphone.app`, so
+adds **Telvoro** to the Start menu (it launches `pythonw -m sipphone.app`, so
 it keeps working across Python updates) — right-click it → *Pin to Start*. It runs
 with no console, opens the UI, and uses the settings in your config (`[tts]
 engine = piper`, `[stt] engine = whisper` are migrated into the voice engine

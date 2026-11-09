@@ -152,7 +152,7 @@ with sync_playwright() as pw:
     check("extracts number from messy text",
           swk.evaluate("self.extractNumber('Call our office at (616) 555-0199 ext 2')") == "6165550199")
     r = swk.evaluate("self.callNumber('Call our office at (616) 555-0199')")
-    check(f"'Call with Nextiva Companion App' places the call ({r})", r.get("ok") and r.get("number") == "6165550199")
+    check(f"'Call with Telvoro' places the call ({r})", r.get("ok") and r.get("number") == "6165550199")
     check("badge shows ON while connected", wait(lambda: badge() == "ON"))
     check("mock switch received the INVITE", "INVITE" in sw.events)
     pg.screenshot(path=os.path.join(OUT, "ext2_oncall.png"))

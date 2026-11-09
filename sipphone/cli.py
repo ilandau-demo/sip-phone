@@ -133,7 +133,7 @@ def first_time_setup(voice: str = "en_US-lessac-medium") -> int:
     except Exception as e:
         print(f"browser bridge: skipped ({e})")
     print(f"settings: {cfg}")
-    print("\nNext: open 'Nextiva Companion App' from the Start menu (right-click it → Pin to Start).")
+    print("\nNext: open 'Telvoro' from the Start menu (right-click it → Pin to Start).")
     print("Its Settings screen opens by itself the first time - enter your Nextiva")
     print("Generic SIP Phone details there. (Editing config.ini by hand still works.)")
     return 0
@@ -250,7 +250,7 @@ def prepare_update() -> int:
             req = urllib.request.Request(f"http://127.0.0.1:{UI_PORT}/api/quit", data=b"{}",
                                          headers={"Content-Type": "application/json"}, method="POST")
             urllib.request.urlopen(req, timeout=3).read()
-            print("asked the running Nextiva Companion App to quit")
+            print("asked the running Telvoro to quit")
         except Exception:
             pass
         for _ in range(60):
@@ -480,13 +480,13 @@ def main(argv=None) -> int:
     ap.add_argument("--ui-port", type=int, default=8088)
     ap.add_argument("--no-browser", action="store_true", help="with --ui: don't open a browser tab (e.g. launched by the Chrome extension)")
     ap.add_argument("--app", action="store_true", help="app mode: no terminal prompt; exit from the UI's Quit button")
-    ap.add_argument("--install-shortcut", action="store_true", help="Windows: add 'Nextiva Companion App' to the Start menu")
+    ap.add_argument("--install-shortcut", action="store_true", help="Windows: add 'Telvoro' to the Start menu")
     ap.add_argument("--stt", metavar="ENGINE", help="transcribe the caller: whisper | vosk")
     ap.add_argument("--tts", metavar="ENGINE", help="enable text-to-speech: piper | espeak | openai | elevenlabs")
     ap.add_argument("--native-host-info", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--extension", action="store_true",
                     help="set up the Chrome/Edge extension folder and open it with the extensions page")
-    ap.add_argument("--startup", choices=["on", "off"], help="start Nextiva Companion App at sign-in (on/off)")
+    ap.add_argument("--startup", choices=["on", "off"], help="start Telvoro at sign-in (on/off)")
     ap.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
                     help="write a setting into the per-user config.ini (repeatable), e.g. --set app.mode=presence")
     ap.add_argument("--register-bridge", action="store_true",
@@ -517,7 +517,7 @@ def main(argv=None) -> int:
         from .app import install_shortcut
         try:
             print(f"created: {install_shortcut()}")
-            print("Open Start, find 'Nextiva Companion App', right-click → Pin to Start.")
+            print("Open Start, find 'Telvoro', right-click → Pin to Start.")
         except RuntimeError as e:
             sys.exit(str(e))
         return 0
@@ -712,7 +712,7 @@ def main(argv=None) -> int:
         result = consume_result()
         if result:
             if result.get("ok"):
-                warnings.append(f"Updated to Nextiva Companion App {result.get('version')}.")
+                warnings.append(f"Updated to Telvoro {result.get('version')}.")
             else:
                 warnings.append(f"The update to {result.get('version')} failed: {result.get('error') or 'see update.log'}. "
                                 f"Still on {__version__}.")

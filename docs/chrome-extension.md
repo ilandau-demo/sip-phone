@@ -1,4 +1,4 @@
-# Nextiva Companion App — Chrome/Edge extension (2.4.0: Team Presence Only built in; Option A bridge since 1.6.0)
+# Telvoro — Chrome/Edge extension (2.4.0: Team Presence Only built in; Option A bridge since 1.6.0)
 
 ## 2.4.0: Team Presence Only (Option C, built — formerly "planned")
 Works with no desktop app, no Python, no native messaging, no local models.
@@ -55,16 +55,16 @@ Works with no desktop app, no Python, no native messaging, no local models.
   Xsi Click-to-Dial (`calls/new`) with the user login.
 
 ## 2.1.1: which zip (user dropped the bundle)
-- Dropping the share bundle `SIP-Phone-x.y.z.zip` → "Could not unzip extension for
-  install" (no manifest.json at root). Bundle now: `SIP Phone Browser Extension.zip`
+- Dropping the share bundle `Telvoro-x.y.z.zip` → "Could not unzip extension for
+  install" (no manifest.json at root). Bundle now: `Telvoro Browser Extension.zip`
   + `Browser Extension/` (unpacked, install.json via=bundle). Separate download:
-  `SIP-Phone-Browser-Extension-<v>.zip`. Reproduced with a real drag under Xvfb
+  `Telvoro-Browser-Extension-<v>.zip`. Reproduced with a real drag under Xvfb
   (`tests/drop_e2e.py`).
 
 ## 2.1.0: droppable zip
 - Chrome's extensions page accepts a dropped `.zip` in Developer mode; manifest.json
   must be at the zip root; fixed `key` keeps the ID. `extension_sync.zip_bytes()/
-  write_zip()` build it (default `~/Downloads/sip-phone-extension-<v>.zip`).
+  write_zip()` build it (default `~/Downloads/telvoro-extension-<v>.zip`).
   `install.json` {via: zip|folder|bundle|store, build}; `build_id()` = sha256 of the
   files. background.js compares builds: folder → `chrome.runtime.reload()`; zip →
   `extension-zip` host command + notification with "Open extensions page".
@@ -82,7 +82,7 @@ Works with no desktop app, no Python, no native messaging, no local models.
 
 ## How it works (Option A, with the app)
 Side panel embeds `http://127.0.0.1:8088/?embed=1`; badge RING / ON / OFF / "!";
-Answer/Decline notifications; right-click **Call "…" with Nextiva Companion App**; Options
+Answer/Decline notifications; right-click **Call "…" with Telvoro**; Options
 page: incoming-call alerts, teammate-ringing alerts, spoken availability
 notifications, Open settings. Bridge = native messaging host `com.sipphone.host`
 (`sipphone-native-host.exe`), registered by the app itself (2.2.0). Local API

@@ -59,11 +59,11 @@ class StagingTests(unittest.TestCase):
         path, ver = updater.stage("sipphone-9.9.9-py3-none-any.whl", open(good, "rb").read())
         self.assertEqual(ver, "9.9.9"); self.assertTrue(os.path.isfile(path))
         self.assertIn(os.path.join(self.home, "sipphone", "updates"), path)
-        bundle = os.path.join(self.src, "SIP-Phone-9.9.9.zip")
+        bundle = os.path.join(self.src, "Telvoro-9.9.9.zip")
         with zipfile.ZipFile(bundle, "w") as z:
             z.write(good, "SIP Phone 9.9.9/sipphone-9.9.9-py3-none-any.whl")
             z.writestr("SIP Phone 9.9.9/Install.bat", "rem")
-        path2, ver2 = updater.stage("SIP-Phone-9.9.9.zip", open(bundle, "rb").read())
+        path2, ver2 = updater.stage("Telvoro-9.9.9.zip", open(bundle, "rb").read())
         self.assertEqual((ver2, os.path.basename(path2)), ("9.9.9", "sipphone-9.9.9-py3-none-any.whl"))
 
     def test_folder_source(self):
@@ -151,7 +151,7 @@ class UploadApiTests(unittest.TestCase):
 
     def test_upload_installs_via_helper(self):
         st, r = self.upload("notes.txt", b"hello")
-        self.assertEqual(st, 400); self.assertIn("isn't a Nextiva Companion App update", r["error"])
+        self.assertEqual(st, 400); self.assertIn("isn't a Telvoro update", r["error"])
         st, r = self.upload("sipphone-9.9.9-py3-none-any.whl", b"garbage")
         self.assertEqual(st, 400)
         st, r = self.upload("sipphone-9.9.9-py3-none-any.whl", open(fake_wheel(self.work, "9.9.9"), "rb").read(),

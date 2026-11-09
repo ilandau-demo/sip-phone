@@ -1,4 +1,4 @@
-"""Chrome / Edge native-messaging host for the Nextiva Companion App extension.
+"""Chrome / Edge native-messaging host for the Telvoro extension.
 
 Chrome starts this program (registered as "com.sipphone.host") when the
 extension calls chrome.runtime.connectNative(). It:
@@ -199,7 +199,7 @@ def manifest_path() -> str:
 
 
 def manifest_dict(exe: str = "") -> dict:
-    return {"name": HOST_NAME, "description": "Nextiva Companion App bridge", "path": exe or host_exe_path(),
+    return {"name": HOST_NAME, "description": "Telvoro bridge", "path": exe or host_exe_path(),
             "type": "stdio", "allowed_origins": [f"chrome-extension://{i}/" for i in allowed_extension_ids()]}
 
 
@@ -520,8 +520,8 @@ def handle(ch: Channel, msg: dict) -> None:
         if cmd == "launch":
             ok = launch_app()
             ch.send({"type": "result", "id": rid, "ok": ok,
-                     "error": "" if ok else ("Nextiva Companion App is updating — it will be back in a moment" if _updating()
-                                             else "The phone didn't start — open Nextiva Companion App from the Start menu")})
+                     "error": "" if ok else ("Telvoro is updating — it will be back in a moment" if _updating()
+                                             else "The phone didn't start — open Telvoro from the Start menu")})
         elif cmd == "call":
             number = "".join(c for c in str(msg.get("number", "")) if c.isdigit() or c in "+*#")
             if not number:

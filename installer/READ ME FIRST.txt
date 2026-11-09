@@ -23,10 +23,10 @@ QUICK START
   2. Double-click  Install.bat  and answer its questions (Enter = the default).
        - If Windows says "Windows protected your PC": More info > Run anyway.
        - No Python on this PC? The installer offers to install it.
-  3. Nextiva Companion App opens in your browser with its Settings screen. Pick
+  3. Telvoro opens in your browser with its Settings screen. Pick
      "Phone + Team view" or "Team view only", fill in the details below, Save.
 
-  That's it. Start it later from "Nextiva Companion App" in the Start menu (right-click >
+  That's it. Start it later from "Telvoro" in the Start menu (right-click >
   Pin to Start), or from the browser extension.
 
 
@@ -115,13 +115,13 @@ THE BROWSER EXTENSION (Chrome or Edge)
   From the Chrome Web Store (recommended):
       https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno
       Install.bat opens that page - click "Add to Chrome" (Edge: allow
-      extensions from other stores), then pin Nextiva Companion App from the puzzle-piece
+      extensions from other stores), then pin Telvoro from the puzzle-piece
       menu. It updates itself and connects to the app with no further setup.
 
   From this folder (no store):
-      Install.bat saves "SIP Phone Browser Extension.zip" to Downloads and
+      Install.bat saves "Telvoro Browser Extension.zip" to Downloads and
       opens the browser's Extensions page: turn on Developer mode, drag the
-      zip onto the page, pin Nextiva Companion App. When the app updates the extension it
+      zip onto the page, pin Telvoro. When the app updates the extension it
       saves a new zip and asks you to drop it again.
 
 
@@ -133,16 +133,16 @@ THE BROWSER EXTENSION (Chrome or Edge)
       browser to reach the XSI server when asked. Presence streams straight
       from the phone system; the gear at the top changes or turns it off.
       No calls, transfers or pick-ups in this mode - that needs the app.
-  The extension is the small file  "SIP Phone Browser Extension.zip"  in this
-  folder - NOT the big SIP-Phone-x.y.z.zip you downloaded (Chrome answers
+  The extension is the small file  "Telvoro Browser Extension.zip"  in this
+  folder - NOT the big Telvoro-x.y.z.zip you downloaded (Chrome answers
   "Could not unzip extension" to that one, and "Manifest file is missing" if
   you point "Load unpacked" at this folder).
 
   To add it, one time only:
     1. Open  chrome://extensions   (Edge: edge://extensions)
     2. Turn on "Developer mode" (top right in Chrome; left side in Edge)
-    3. Drag  SIP Phone Browser Extension.zip  from this folder onto that page
-    4. Click the puzzle-piece icon in the toolbar and pin "Nextiva Companion App"
+    3. Drag  Telvoro Browser Extension.zip  from this folder onto that page
+    4. Click the puzzle-piece icon in the toolbar and pin "Telvoro"
   (Install.bat offers to open both windows for you when you answer Y. Prefer
   "Load unpacked"? Choose the  Browser Extension  folder in here, or the
   self-updating one at C:\Users\<you>\SIP Phone Extension.)
@@ -161,7 +161,7 @@ UPDATING
   Any of these - your settings, contacts and history are always kept, and the
   browser extension updates itself:
     - In the app: Settings > Updates > "Install from file...", pick the new
-      sipphone-x.y.z.whl (or the whole SIP-Phone-x.y.z.zip). It installs and
+      sipphone-x.y.z.whl (or the whole Telvoro-x.y.z.zip). It installs and
       restarts by itself - about a minute.
     - Or extract the new zip and run its Install.bat.
     - For a team: put the new .whl files in a shared folder (or host a
@@ -187,7 +187,7 @@ USING IT
     Transfer (blind), Warm (talk to them first) or Conf (3-way).
   - Type in the box at the bottom and press Enter - the caller hears it.
   - Quick phrases above the box send with one click ("Edit phrases" to change).
-  - "Start Nextiva Companion App when I sign in" (Settings > Startup) keeps it running in
+  - "Start Telvoro when I sign in" (Settings > Startup) keeps it running in
     the background so the extension always finds it.
 
 
@@ -216,8 +216,8 @@ TROUBLESHOOTING
       monitoring rights (ask your provider). "acknowledgements failing" = the
       server refuses event responses; presence lags until it accepts them.
 
-  Extension says "Install the Nextiva Companion desktop app"
-      The browser can't find the bridge. Start Nextiva Companion App once (it registers the
+  Extension says "Install the Telvoro desktop app"
+      The browser can't find the bridge. Start Telvoro once (it registers the
       bridge on every start) and check Settings > Browser extension says
       "Browser link: ready"; if not, click "Connect now" - or run Install.bat.
 

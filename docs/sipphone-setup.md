@@ -101,8 +101,8 @@ account changes re-register live; Team-view changes rebuild the engine live;
 local port / audio need a restart. Passwords write-only (blank = keep).
 
 ## Sharing with someone else
-Send `SIP-Phone-<version>.zip` (Install.bat, install.ps1, the .whl, READ ME
-FIRST.txt, `SIP Phone Browser Extension.zip`, `Browser Extension/`). No
+Send `Telvoro-<version>.zip` (Install.bat, install.ps1, the .whl, READ ME
+FIRST.txt, `Telvoro Browser Extension.zip`, `Browser Extension/`). No
 credentials inside. Presence-only users need only the extension zip. Full
 install: Python 3.9+, unzip, Install.bat (installs wheel, optional piper-tts /
 faster-whisper, `--setup`, bridge, extension folder, starts the app).

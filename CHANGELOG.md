@@ -1,11 +1,12 @@
 # Changelog
 
-## 2.5.0 — 2026-11-09 — presence in under a second; renamed Nextiva Companion App
-- **Renamed** to *Nextiva Companion App* everywhere people see it: Chrome Web
-  Store name and summary, toolbar tooltip, side panel, notifications, context
+## 2.5.0 — 2026-11-09 — presence in under a second; renamed Telvoro - Presence & SIP Phone
+- **Renamed** to *Telvoro - Presence & SIP Phone* ("Telvoro" in running text)
+  everywhere people see it: Chrome Web Store name and summary ("An independent
+  side-panel companion designed to work with Nextiva …"), toolbar tooltip, side panel, notifications, context
   menu, the app page, Start-menu entry, installer and docs. The old "SIP
-  Phone" Start-menu and sign-in shortcuts are replaced (removed, not left
-  beside the new ones); Uninstall removes either name. Unchanged on purpose:
+  Phone" and "Nextiva Companion App" Start-menu and sign-in shortcuts are
+  replaced (removed, not left beside the new ones); Uninstall removes any of them. Unchanged on purpose:
   the extension ID, the Python package `sipphone`, the bridge
   `com.sipphone.host`, the config folder and the `SIP Phone Extension` folder —
   existing installs keep their settings and stay connected.
@@ -64,6 +65,9 @@
   note that each alert fires once. Same in the extension's Team view.
 - Fix: the status dot in a person's details was always grey; it now uses the
   status colour (green Available, amber on a call, red ringing/DND).
+- Store screenshots and promo tile redrawn with the Telvoro name; release files
+  are now `Telvoro-<v>.zip`, `Telvoro-Browser-Extension-<v>.zip` and
+  `webstore/telvoro-extension-<v>-webstore.zip`.
 - Example config cleaned of the retired BLF options.
 - Extension files unchanged — the store package is a version bump only.
 

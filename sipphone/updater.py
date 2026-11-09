@@ -2,7 +2,7 @@
 
 A new version reaches the app in one of two ways:
 
-  * the user picks a sipphone-*.whl (or the whole SIP-Phone-x.y.z.zip) in
+  * the user picks a sipphone-*.whl (or the whole Telvoro-x.y.z.zip) in
     Settings -> Updates, or
   * an *update source* — a folder / network share that holds the wheels, or an
     https:// address of a latest.json {"version": "...", "wheel": "...url..."} —
@@ -135,7 +135,7 @@ def validate_wheel(path: str) -> str:
     name = os.path.basename(path)
     ver = wheel_version(name)
     if not ver:
-        raise ValueError("That isn't a Nextiva Companion App update file (expected sipphone-<version>-py3-none-any.whl)")
+        raise ValueError("That isn't a Telvoro update file (expected sipphone-<version>-py3-none-any.whl)")
     if os.path.getsize(path) > MAX_WHEEL:
         raise ValueError("Update file is too large")
     try:
@@ -143,7 +143,7 @@ def validate_wheel(path: str) -> str:
             names = z.namelist()
             init = next((n for n in names if n == "sipphone/__init__.py"), None)
             if init is None or not any(n.endswith(".dist-info/METADATA") for n in names):
-                raise ValueError("Update file is damaged or isn't Nextiva Companion App")
+                raise ValueError("Update file is damaged or isn't Telvoro")
             m = re.search(rb'__version__\s*=\s*"([^"]+)"', z.read(init))
             if m and m.group(1).decode() != ver:
                 raise ValueError(f"Update file name says {ver} but it contains {m.group(1).decode()}")
@@ -154,7 +154,7 @@ def validate_wheel(path: str) -> str:
 
 def stage(src: str, data: Optional[bytes] = None) -> tuple:
     """Put a wheel in <config>/updates/. *src* is a filename (data given) or a
-    path. A SIP-Phone-x.y.z.zip bundle is accepted too: its wheel is used.
+    path. A Telvoro-x.y.z.zip bundle is accepted too: its wheel is used.
     Returns (staged_path, version)."""
     folder = os.path.join(_config_dir(), "updates")
     os.makedirs(folder, exist_ok=True)
@@ -171,7 +171,7 @@ def stage(src: str, data: Optional[bytes] = None) -> tuple:
         with zipfile.ZipFile(src) as z:
             inner = [n for n in z.namelist() if WHEEL_RE.match(os.path.basename(n))]
             if not inner:
-                raise ValueError("That zip doesn't contain a Nextiva Companion App update (sipphone-*.whl)")
+                raise ValueError("That zip doesn't contain a Telvoro update (sipphone-*.whl)")
             inner.sort(key=lambda n: version_tuple(wheel_version(os.path.basename(n))))
             target = os.path.join(folder, os.path.basename(inner[-1]))
             with z.open(inner[-1]) as r, open(target, "wb") as w:
@@ -244,7 +244,7 @@ def download(url: str, timeout: float = 60.0) -> tuple:
 
 
 # ------------------------------------------------------------------- helper
-HELPER = r'''# Nextiva Companion App update helper - started by the app, runs after it has quit.
+HELPER = r'''# Telvoro update helper - started by the app, runs after it has quit.
 import json, os, socket, subprocess, sys, time
 a = dict(zip(sys.argv[1::2], sys.argv[2::2]))
 wheel, port, lock, logp = a["--wheel"], int(a["--port"]), a["--lock"], a["--log"]
@@ -460,7 +460,7 @@ class UpdateManager:
     def install_file(self, path: str) -> dict:
         """Hand a staged wheel to the helper and quit. Raises on refusal."""
         if self.on_quit is None:
-            raise RuntimeError("Updates install from the Nextiva Companion desktop app (Start menu), not from a terminal session. "
+            raise RuntimeError("Updates install from the Telvoro desktop app (Start menu), not from a terminal session. "
                                f"Run:  python -m pip install --upgrade --force-reinstall --no-deps \"{path}\"")
         if self.busy():
             raise RuntimeError("A call is active — try again after it ends")
@@ -473,6 +473,6 @@ class UpdateManager:
         self.error = ""
         launch_helper(path, ver, self.port)
         if self.ui is not None:
-            self.ui.add("event", f"Installing Nextiva Companion App {ver} — back in a moment")
+            self.ui.add("event", f"Installing Telvoro {ver} — back in a moment")
         threading.Timer(0.8, self.on_quit).start()
         return {"ok": True, "version": ver}

@@ -1,4 +1,4 @@
-// Nextiva Companion App — background service worker.
+// Telvoro — background service worker.
 // Holds the native-messaging port to the desktop app (which also keeps this
 // worker alive), mirrors its status into the toolbar badge, raises
 // notifications, and turns right-clicks on phone numbers into calls.
@@ -33,7 +33,7 @@ function connect() {
     const wasUpdating = hostState === 'updating' || !!status.updating;
     hostState = wasUpdating ? 'updating' : (/not found|forbidden|access/i.test(err) ? 'missing' : 'error');
     status = { up: false, updating: wasUpdating };
-    for (const [, p] of pending) p.resolve({ ok: false, error: err || 'Lost connection to Nextiva Companion App' });
+    for (const [, p] of pending) p.resolve({ ok: false, error: err || 'Lost connection to Telvoro' });
     pending.clear();
     publish(); updateBadge();
     if (wasUpdating) waitForUpdate();                          // the bridge is being replaced: poll instead
@@ -89,18 +89,18 @@ function waitForUpdate() {
 }
 
 function request(cmd, extra = {}) {
-  if (hostState === 'updating') return Promise.resolve({ ok: false, error: 'Nextiva Companion App is updating — back in a moment.' });
+  if (hostState === 'updating') return Promise.resolve({ ok: false, error: 'Telvoro is updating — back in a moment.' });
   connect();
   if (!port) {
     return Promise.resolve({ ok: false, error: hostState === 'missing'
-      ? 'The Nextiva Companion desktop app is not installed on this computer.' : 'Not connected to Nextiva Companion App.' });
+      ? 'The Telvoro desktop app is not installed on this computer.' : 'Not connected to Telvoro.' });
   }
   const id = ++reqId;
   return new Promise(resolve => {
     pending.set(id, { resolve });
     port.postMessage(Object.assign({ cmd, id }, extra));
     setTimeout(() => {
-      if (pending.has(id)) { pending.delete(id); resolve({ ok: false, error: 'Nextiva Companion App did not respond.' }); }
+      if (pending.has(id)) { pending.delete(id); resolve({ ok: false, error: 'Telvoro did not respond.' }); }
     }, 25000);
   });
 }
@@ -144,8 +144,8 @@ async function offerZipUpdate(appVersion, build) {
   await chrome.storage.local.set({ zipOfferedFor: build });
   zipOffer = { name: r.name, folder: r.folder };
   chrome.notifications.create('ext-zip', {
-    type: 'basic', iconUrl: 'icons/icon128.png', title: 'Nextiva Companion App extension update',
-    message: `${r.name} was saved to your Downloads folder. Drag it onto the extensions page to update (Nextiva Companion App ${appVersion}).`,
+    type: 'basic', iconUrl: 'icons/icon128.png', title: 'Telvoro extension update',
+    message: `${r.name} was saved to your Downloads folder. Drag it onto the extensions page to update (Telvoro ${appVersion}).`,
     requireInteraction: true, priority: 1, buttons: [{ title: 'Open extensions page' }]
   });
 }
@@ -252,7 +252,7 @@ async function judgeTransitions(snap) {
 // --------------------------------------------------------------------- badge
 function updateBadge() {
   const c = status.call, t = status.team;
-  let text = '', color = '#5C6B70', title = 'Nextiva Companion App';
+  let text = '', color = '#5C6B70', title = 'Telvoro';
   const presence = status.mode === 'presence';
   if (!status.up && teamSnap) {
     const r = teamSnap.ringing || [];
@@ -261,12 +261,12 @@ function updateBadge() {
     else title = 'Team view' + (teamSnap.last_error ? ` — ${teamSnap.last_error}` : teamSnap.connected ? ' · live' : ' · connecting…');
   } else if (!status.up) {
     text = hostState === 'updating' ? '…' : hostState === 'missing' ? '!' : '';
-    title = hostState === 'updating' ? 'Nextiva Companion App is updating…'
-          : hostState === 'missing' ? 'Nextiva Companion App: desktop app not installed' : 'Nextiva Companion App: not running — click to start';
+    title = hostState === 'updating' ? 'Telvoro is updating…'
+          : hostState === 'missing' ? 'Telvoro: desktop app not installed' : 'Telvoro: not running — click to start';
   } else if (presence) {
     if (t && t.ringing && t.ringing.length) { text = 'RING'; color = '#B8352A'; title = `${t.ringing[0]} is ringing`; }
     else if (t && t.active) { text = String(t.active); title = `Team view · ${t.active} of ${t.total} teammates on a call`; }
-    else title = `Team view · ${status.name || 'Nextiva Companion App'}` + (t && t.error ? ` — ${t.error}` : '');
+    else title = `Team view · ${status.name || 'Telvoro'}` + (t && t.error ? ` — ${t.error}` : '');
   } else if (c && c.state === 'incoming') {
     text = 'RING'; color = '#B8352A'; title = `Incoming call: ${who(c)}`;
   } else if (c && c.state === 'connected') {
@@ -274,11 +274,11 @@ function updateBadge() {
   } else if (c && c.state === 'calling') {
     text = '…'; color = '#D08A1C'; title = `Calling ${who(c)}`;
   } else if (!status.registered) {
-    text = 'OFF'; color = '#B8352A'; title = `Nextiva Companion App: not registered — ${status.reg_detail || ''}`;
+    text = 'OFF'; color = '#B8352A'; title = `Telvoro: not registered — ${status.reg_detail || ''}`;
   } else if (t && t.active) {
-    text = String(t.active); title = `${status.name || 'Nextiva Companion App'} · ${t.active} of ${t.total} teammates on a call`;
+    text = String(t.active); title = `${status.name || 'Telvoro'} · ${t.active} of ${t.total} teammates on a call`;
   } else {
-    title = `Nextiva Companion App · ${status.name || ''} is registered`;
+    title = `Telvoro · ${status.name || ''} is registered`;
   }
   chrome.action.setBadgeText({ text });
   chrome.action.setBadgeBackgroundColor({ color });
@@ -304,7 +304,7 @@ async function maybeNotify(prev, cur) {
       if (!before.has(n)) {
         chrome.notifications.create(`team:${n}:${Date.now()}`, {
           type: 'basic', iconUrl: 'icons/icon128.png', title: `${n} is ringing`,
-          message: 'Open Nextiva Companion App to pick up the call for them.', priority: 1
+          message: 'Open Telvoro to pick up the call for them.', priority: 1
         });
       }
     }
@@ -348,8 +348,8 @@ self.hostStateNow = () => hostState;
 
 function setupMenus() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'call-sel', title: 'Call “%s” with Nextiva Companion App', contexts: ['selection'] });
-    chrome.contextMenus.create({ id: 'call-link', title: 'Call with Nextiva Companion App', contexts: ['link'],
+    chrome.contextMenus.create({ id: 'call-sel', title: 'Call “%s” with Telvoro', contexts: ['selection'] });
+    chrome.contextMenus.create({ id: 'call-link', title: 'Call with Telvoro', contexts: ['link'],
                                  targetUrlPatterns: ['tel:*', 'callto:*', 'sip:*'] });
     updateMenus();
   });

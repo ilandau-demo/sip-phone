@@ -1,11 +1,11 @@
-# Publishing the Nextiva Companion App extension to the Chrome Web Store
+# Publishing the Telvoro extension to the Chrome Web Store
 
 Everything referenced here is in this folder (`webstore/`) of the
 [sip-phone](https://github.com/ilandau-demo/sip-phone) repository.
 
 | File | Use |
 |---|---|
-| `sip-phone-extension-2.5.0-webstore.zip` | the package you upload |
+| `telvoro-extension-2.5.0-webstore.zip` | the package you upload |
 | `screenshot-1-phone-1280x800.png`, `screenshot-2-presence-1280x800.png` | listing screenshots |
 | `promo-tile-440x280.png` | optional promo tile |
 | `LISTING.txt` | text to paste into the store forms |
@@ -24,7 +24,7 @@ zone → Change visibility → Public). The URL to give the store is:
 2. Accept the developer agreement, pay the one-time $5 fee, verify the email.
 
 ## 3. Upload and fill in the listing (about 15 minutes)
-1. **+ New item** → upload `sip-phone-extension-2.5.0-webstore.zip`.
+1. **+ New item** → upload `telvoro-extension-2.5.0-webstore.zip`.
 2. **Store listing** tab (copy from `LISTING.txt`): Name, Summary, Description;
    category *Productivity → Communication*; language *English (US)*; upload
    the two screenshots.
@@ -41,8 +41,8 @@ The listing's ID is `kghndilnhefammdeabhnjlphlmeeomno`
 It is built into the app's bridge allow-list and into `$StoreUrl` in
 `installer/install.ps1`, so Install.bat sends new users to the store and the
 store copy connects to the app on its own. Share the store link: *Add to
-Chrome* → pin Nextiva Companion App. Presence-only users are done; phone users also run
-Install.bat from `releases/2.5.0/SIP-Phone-2.5.0.zip`.
+Chrome* → pin Telvoro. Presence-only users are done; phone users also run
+Install.bat from `releases/2.5.0/Telvoro-2.5.0.zip`.
 
 ## Updating the extension later
 ```
@@ -55,5 +55,5 @@ updates everyone automatically within a few hours.
 - *Why `https://*/*` as an optional permission?* The user's phone system is on
   a customer-specific host name; the permission is requested only for the one
   address the user types in team-presence mode, never silently.
-- *Why `nativeMessaging`?* The extension is a front end for the Nextiva Companion desktop
+- *Why `nativeMessaging`?* The extension is a front end for the Telvoro desktop
   app on the same computer; nothing is sent to any other server.
