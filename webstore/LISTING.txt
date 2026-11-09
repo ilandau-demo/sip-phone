@@ -1,4 +1,4 @@
-CHROME WEB STORE LISTING - SIP Phone extension 2.4.3
+CHROME WEB STORE LISTING - SIP Phone extension 2.4.4
 =====================================================
 (paste these into the Developer Dashboard; steps are in STEPS.txt)
 

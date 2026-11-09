@@ -250,9 +250,12 @@ if (-not $NoStartup -and (Ask "`nStart SIP Phone automatically when you sign in 
 Step "9. Starting SIP Phone"
 # 9. Start the phone. On a new install its Settings screen opens for the details.
 try {
-    $app = (Invoke-Py -c "from sipphone.app import app_exe_path; print(app_exe_path())").Trim()
-    if (Test-Path $app) {
-        if ($Quiet) { Start-Process -FilePath $app -ArgumentList '--no-browser' } else { Start-Process -FilePath $app }
+    # Start through pythonw (what the Start-menu shortcut does too) - the pip exe
+    # launcher breaks when the Python it was installed with changes.
+    $pyw = (Invoke-Py -c "from sipphone.app import pythonw; print(pythonw())").Trim()
+    if (Test-Path $pyw) {
+        $appArgs = @('-m', 'sipphone.app'); if ($Quiet) { $appArgs += '--no-browser' }
+        Start-Process -FilePath $pyw -ArgumentList $appArgs
         Write-Host "`nStarting SIP Phone..."
     }
 } catch { }

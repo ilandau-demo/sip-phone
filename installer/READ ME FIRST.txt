@@ -1,4 +1,4 @@
-SIP PHONE  -  version 2.4.3
+SIP PHONE  -  version 2.4.4
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
@@ -217,6 +217,15 @@ TROUBLESHOOTING
   See every SIP message (for support)
       PowerShell:  python -m sipphone --debug
 
+
+IF THE APP WON'T OPEN / "127.0.0.1 didn't send any data"
+  Run in PowerShell:   python -m sipphone --diagnose
+  It shows which install is active, who holds port 8088, whether the stored
+  password is readable and what the SIP server answered to one REGISTER.
+  Since 2.4.4 the app stops a stuck older copy on port 8088 by itself; the
+  Start-menu shortcut starts the app through pythonw -m sipphone.app, so
+  re-run Install.bat (or  python -m sipphone --install-shortcut) once to
+  refresh a shortcut made by an older version.
 
 UNINSTALL
 ---------

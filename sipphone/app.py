@@ -49,32 +49,55 @@ def icon_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "sipphone.ico")
 
 
-def install_shortcut() -> str:
-    """Create a Start-menu shortcut (Windows). Returns the .lnk path."""
-    if sys.platform != "win32":
-        raise RuntimeError("Start-menu shortcuts are a Windows feature")
-    target = app_exe_path()
+def shortcut_target(extra_args: list | None = None) -> tuple[str, str]:
+    """(TargetPath, Arguments) for a shortcut that starts the app.
+
+    Shortcuts go through the interpreter (``pythonw.exe -m sipphone.app``) rather
+    than the pip-made sipphone-app.exe: the exe launcher embeds the interpreter
+    path it was installed with, which breaks when that Python is removed or
+    updated (Store Python in particular), while pythonw is always the one that
+    actually has the package. The exe is still used for the browser bridge."""
+    args = ["-m", "sipphone.app"] + list(extra_args or [])
+    return pythonw(), " ".join(args)
+
+
+def _ps_quote(s: str) -> str:
+    return s.replace("'", "''")
+
+
+def _write_shortcut(lnk: str, description: str, extra_args: list | None = None) -> str:
+    target, arguments = shortcut_target(extra_args)
     if not os.path.isfile(target):
-        raise RuntimeError(f"sipphone-app.exe not found (looked in {_scripts_dir()}); reinstall the package")
-    programs = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs")
-    # The Store build of Python virtualises APPDATA; resolve the real folder via the shell.
-    real = subprocess.run(["powershell", "-NoProfile", "-Command",
-                           "[Environment]::GetFolderPath('Programs')"], capture_output=True, text=True)
-    if real.returncode == 0 and real.stdout.strip():
-        programs = real.stdout.strip()
-    lnk = os.path.join(programs, "SIP Phone.lnk")
+        raise RuntimeError(f"Python not found at {target}; reinstall the package")
+    workdir = os.path.expanduser("~")
     ps = f"""
-$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}')
-$s.TargetPath = '{target}'
-$s.WorkingDirectory = '{os.path.dirname(target)}'
-$s.IconLocation = '{icon_path()},0'
-$s.Description = 'SIP softphone with text-to-speech'
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{_ps_quote(lnk)}')
+$s.TargetPath = '{_ps_quote(target)}'
+$s.Arguments = '{_ps_quote(arguments)}'
+$s.WorkingDirectory = '{_ps_quote(workdir)}'
+$s.IconLocation = '{_ps_quote(icon_path())},0'
+$s.Description = '{_ps_quote(description)}'
+$s.WindowStyle = 7
 $s.Save()
 """
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"could not create shortcut: {r.stderr.strip()}")
     return lnk
+
+
+def install_shortcut() -> str:
+    """Create a Start-menu shortcut (Windows). Returns the .lnk path."""
+    if sys.platform != "win32":
+        raise RuntimeError("Start-menu shortcuts are a Windows feature")
+    programs = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs")
+    # The Store build of Python virtualises APPDATA; resolve the real folder via the shell.
+    real = subprocess.run(["powershell", "-NoProfile", "-Command",
+                           "[Environment]::GetFolderPath('Programs')"], capture_output=True, text=True)
+    if real.returncode == 0 and real.stdout.strip():
+        programs = real.stdout.strip()
+    os.makedirs(programs, exist_ok=True)
+    return _write_shortcut(os.path.join(programs, "SIP Phone.lnk"), "SIP softphone with text-to-speech")
 
 
 def _startup_entry() -> str:
@@ -103,27 +126,14 @@ def set_start_with_windows(on: bool) -> str:
         except FileNotFoundError:
             pass
         return entry
-    target = app_exe_path()
-    if not os.path.isfile(target):
-        raise RuntimeError(f"sipphone-app not found at {target}; reinstall the package")
     os.makedirs(os.path.dirname(entry), exist_ok=True)
     if sys.platform == "win32":
-        ps = f"""
-$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{entry}')
-$s.TargetPath = '{target}'
-$s.Arguments = '--no-browser'
-$s.WorkingDirectory = '{os.path.dirname(target)}'
-$s.IconLocation = '{icon_path()},0'
-$s.Description = 'SIP Phone (starts in the background at sign-in)'
-$s.Save()
-"""
-        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
-        if r.returncode != 0:
-            raise RuntimeError(f"could not create the startup shortcut: {r.stderr.strip()}")
+        _write_shortcut(entry, "SIP Phone (starts in the background at sign-in)", ["--no-browser"])
     else:
+        target, arguments = shortcut_target(["--no-browser"])
         with open(entry, "w", encoding="utf-8") as f:
             f.write("[Desktop Entry]\nType=Application\nName=SIP Phone\n"
-                    f"Exec={target} --no-browser\nX-GNOME-Autostart-enabled=true\n")
+                    f"Exec={target} {arguments}\nX-GNOME-Autostart-enabled=true\n")
     return entry
 
 
@@ -155,6 +165,57 @@ def _quit_running() -> None:
         pass
 
 
+def port_owner(port: int) -> tuple[int, str]:
+    """(pid, image name) of the process listening on 127.0.0.1:port, or (0, '')."""
+    try:
+        if sys.platform == "win32":
+            out = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, timeout=10).stdout
+            pid = 0
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 5 and parts[0] == "TCP" and parts[1].endswith(f":{port}") and parts[3] == "LISTENING":
+                    pid = int(parts[4]); break
+            if not pid:
+                return 0, ""
+            tl = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                                capture_output=True, text=True, timeout=10).stdout
+            name = tl.strip().split('","')[0].strip('"') if tl.strip() else ""
+            return pid, name
+        out = subprocess.run(["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=10).stdout
+        pid = int(out.split()[0]) if out.split() else 0
+        if not pid:
+            return 0, ""
+        name = subprocess.run(["ps", "-o", "comm=", "-p", str(pid)], capture_output=True, text=True, timeout=10).stdout.strip()
+        return pid, name
+    except Exception:
+        return 0, ""
+
+
+def kill_stuck_instance(port: int = UI_PORT) -> str:
+    """Terminate an unresponsive earlier copy of the app holding our port.
+
+    Only python/pythonw/sipphone processes are touched — anything else on the
+    port is left alone and reported. Returns a one-line note of what happened."""
+    pid, name = port_owner(port)
+    if not pid:
+        return "nothing is listening on the port"
+    ours = any(k in name.lower() for k in ("python", "sipphone"))
+    if not ours:
+        return f"port {port} is used by {name or 'another program'} (pid {pid}); not touched"
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, timeout=10)
+        else:
+            os.kill(pid, 9)
+    except Exception as e:
+        return f"could not stop {name} (pid {pid}): {e}"
+    for _ in range(20):
+        if not _port_in_use(port):
+            break
+        time.sleep(0.25)
+    return f"stopped unresponsive {name} (pid {pid})"
+
+
 def pythonw() -> str:
     """This interpreter, windowless where available."""
     exe = sys.executable
@@ -166,7 +227,7 @@ def pythonw() -> str:
 
 
 def relaunch_command(args: list) -> list:
-    """How a Python process should start the app. The pip-made sipphone-app.exe
+    r"""How a Python process should start the app. The pip-made sipphone-app.exe
     launcher can't resolve Store Python's pythonw alias from inside a Store
     Python process (its AppData\Local is redirected), so always go through the
     interpreter itself; the exe launcher is only for Explorer / the Start menu."""
@@ -256,15 +317,28 @@ def main() -> int:
         # why updates don't show. Ask it to quit, wait for the port to free,
         # then start the current version in its place.
         logging.info("replacing running version %s with %s", running or "unknown", __version__)
-        _quit_running()
-        for _ in range(20):
-            if not _port_in_use(UI_PORT):
-                break
-            time.sleep(0.25)
+        if running:
+            _quit_running()
+            for _ in range(20):
+                if not _port_in_use(UI_PORT):
+                    break
+                time.sleep(0.25)
         if _port_in_use(UI_PORT):
-            logging.warning("old instance didn't exit; opening whatever is there")
-            webbrowser.open(f"http://127.0.0.1:{UI_PORT}/")
-            return 0
+            # It isn't answering (or won't quit): a copy left over from a removed
+            # install, hung on the port. Stop it rather than opening a dead page.
+            note = kill_stuck_instance(UI_PORT)
+            logging.warning("port %s still busy: %s", UI_PORT, note)
+        if _port_in_use(UI_PORT):
+            msg = (f"SIP Phone can't start: port {UI_PORT} is in use by another program "
+                   f"({port_owner(UI_PORT)[1] or 'unknown'}). Close it and try again.")
+            logging.error(msg)
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    ctypes.windll.user32.MessageBoxW(0, msg, "SIP Phone", 0x10)
+                except Exception:
+                    pass
+            return 1
 
     try:
         return cli_main(["--config", cfg_path, "--ui", "--ui-port", str(UI_PORT), "--app"]

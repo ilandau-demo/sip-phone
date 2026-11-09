@@ -311,6 +311,16 @@ def diagnose(path: str) -> int:
     from . import config_store
     from .authentication import credential_store
     print(f"config: {path}")
+    from . import __version__
+    from .app import UI_PORT, _running_version, port_owner
+    print(f"this install: sipphone {__version__} on {sys.executable}")
+    pid, name = port_owner(UI_PORT)
+    if pid:
+        running = _running_version()
+        print(f"app port {UI_PORT}: held by {name or '?'} (pid {pid}) — "
+              + (f"running version {running}" if running else "NOT ANSWERING (stuck copy; starting the app will stop it)"))
+    else:
+        print(f"app port {UI_PORT}: free (the app is not running)")
     cp = config_store.read(path)
     acct = cp["account"] if cp.has_section("account") else {}
     raw_pw = ""

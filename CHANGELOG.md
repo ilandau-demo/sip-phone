@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.4 — 2026-11-08
+- Start-menu and start-at-sign-in shortcuts now run `pythonw -m sipphone.app`
+  instead of the pip-made `sipphone-app.exe` launcher, which stops working
+  when the Python it was installed with is removed or updated (Store Python).
+  Re-run `--setup`, `--install-shortcut` or toggle "Start with Windows" to
+  rewrite an existing shortcut. Install.bat starts the app the same way.
+- Start-up: a copy of the app left over from a removed install that holds
+  port 8088 without answering is stopped and replaced, instead of the browser
+  opening a dead "127.0.0.1 didn't send any data" page. If another program
+  owns the port, a message box says which one.
+- `python -m sipphone --diagnose` shows the installed version/interpreter and
+  who holds the app port; stored-password (DPAPI) check hardened.
+
 ## 2.4.3 — 2026-11-05
 - Installer: set `$StoreUrl` at the top of install.ps1 once the extension is on
   the Chrome Web Store; Install.bat then opens the store page (one click,
