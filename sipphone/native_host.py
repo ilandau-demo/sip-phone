@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from typing import Optional
 
@@ -286,9 +287,13 @@ def bridge_status() -> dict:
 # ---------------------------------------------------------------- status pump
 def build_status() -> dict:
     try:
-        s = _http("/api/state?since=999999999")
-    except Exception:
-        return {"type": "status", "up": False, "updating": _updating()}
+        s = _http("/api/state?since=999999999", timeout=5.0)
+    except Exception as e:
+        # A refused connection means the app is gone; anything else (a slow
+        # answer, a transient server error) is reported so it can be debounced.
+        refused = isinstance(e, (ConnectionRefusedError, urllib.error.URLError)) and \
+            isinstance(getattr(e, "reason", e), ConnectionRefusedError)
+        return {"type": "status", "up": False, "updating": _updating(), "_err": repr(e), "_refused": refused}
     st = {"type": "status", "up": True, "version": s.get("version"),
           "mode": s.get("mode", "phone"),
           "registered": s.get("registered"), "reg_detail": s.get("reg_detail"),
@@ -322,8 +327,27 @@ def _key(st: dict) -> str:
 def pump(ch: Channel, stop: threading.Event, interval: float = 1.0) -> None:
     last = None
     beat = 0.0
+    misses = 0
     while not stop.is_set():
         st = build_status()
+        if not st.get("up") and not st.get("updating") and not st.get("_refused"):
+            # One slow or failed poll must not flip the panel to "stopped":
+            # only two in a row count (a refused connection counts at once).
+            misses += 1
+            if misses == 1:
+                log.warning("status poll failed (%s); retrying before reporting the app down", st.get("_err"))
+            if misses < 2:
+                stop.wait(interval)
+                continue
+        elif st.get("up"):
+            if misses:
+                log.info("status poll recovered after %d miss(es)", misses)
+            misses = 0
+        else:
+            misses = 0
+        if not st.get("up") and last and json.loads(last)[0]:
+            log.warning("app reported down: %s", st.get("_err", "connection refused"))
+        st.pop("_err", None); st.pop("_refused", None)
         if not st.get("up") and st.get("updating"):
             # An update is installing: pip must be able to replace this very
             # program, so tell the extension and get out of the way. The

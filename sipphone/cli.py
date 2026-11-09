@@ -505,7 +505,8 @@ def main(argv=None) -> int:
         print(audio_mod.list_devices())
         return 0
     if args.diagnose:
-        return diagnose(args.config)
+        # the app always uses the per-user config; so does the health check
+        return diagnose(args.config or os.path.join(config_dir(), "config.ini"))
     if args.check_admin:
         args.config = find_config(args.config)
         _, _, admin_opts = load_config(args.config)
