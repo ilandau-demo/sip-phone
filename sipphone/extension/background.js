@@ -37,6 +37,7 @@ function connect() {
     pending.clear();
     publish(); updateBadge();
     if (wasUpdating) waitForUpdate();                          // the bridge is being replaced: poll instead
+    else if (/forbidden|access/i.test(err)) introduce();        // bridge is there but doesn't know this copy's ID
     else if (hostState !== 'missing') setTimeout(connect, 3000); // app crashed/restarted: reconnect
     else if (!missingRetry) missingRetry = setInterval(() => { // installer re-registers it: pick that up
       if (hostState === 'missing') { hostState = 'connecting'; connect(); }
@@ -44,6 +45,31 @@ function connect() {
     }, 20000);
   });
   publish();
+}
+
+// Chrome refused the native connection: the bridge is registered, but this
+// copy's extension ID (a Chrome Web Store install gets its own) isn't on its
+// allow-list yet. If the app answers over HTTP, tell it who we are — it adds
+// the ID and rewrites the bridge manifest — then connect again.
+let introducing = false;
+async function introduce() {
+  if (introducing) return;
+  introducing = true;
+  let ok = false, added = false;
+  try {
+    const r = await fetch('http://127.0.0.1:8088/api/extension/hello', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: chrome.runtime.id }), cache: 'no-store' });
+    const j = r.ok ? await r.json() : {};
+    ok = !!j.ok; added = !!j.added;
+  } catch (e) { /* app not running: fall through to the slow retry */ }
+  introducing = false;
+  if (ok) { hostState = 'connecting'; setTimeout(connect, added ? 1500 : 3000); return; }
+  hostState = 'missing'; publish(); updateBadge();
+  if (!missingRetry) missingRetry = setInterval(() => {
+    if (hostState === 'missing') { hostState = 'connecting'; connect(); }
+    else { clearInterval(missingRetry); missingRetry = null; }
+  }, 20000);
 }
 
 // While the update helper swaps the files, nothing may hold the bridge open.

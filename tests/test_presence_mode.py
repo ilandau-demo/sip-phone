@@ -199,3 +199,52 @@ class EventsSourceTests(unittest.TestCase):
             srv.ui_state.monitor.stop(); srv.shutdown(); srv.server_close(); phone.stop(); sw.stop.set(); mock.stop()
             xsi_events.HEARTBEAT = 15.0
             shutil.rmtree(d, ignore_errors=True)
+
+
+class ExtensionHelloTests(PresenceModeTests):
+    """A store-installed extension (unknown ID) introduces itself and joins the bridge allow-list."""
+    def hello(self, ext_id, origin):
+        h = {"Content-Type": "application/json"}
+        if origin is not None: h["Origin"] = origin
+        r = urllib.request.Request(self.base + "/api/extension/hello", data=json.dumps({"id": ext_id}).encode(),
+                                   headers=h, method="POST")
+        try:
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                return resp.status, json.load(resp)
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b"{}")
+
+    def test_no_registration_but_presence_works(self): pass   # inherited setup only
+
+    def test_unknown_id_is_added_when_origin_matches(self):
+        from sipphone.native_host import allowed_extension_ids
+        import sipphone.native_host as nh
+        from sipphone import cli
+        new = "abcdefghijklmnopabcdefghijklmnop"
+        orig_find = cli.find_config
+        cli.find_config = lambda explicit="": self.p       # the allow-list reads this test's config
+        nh.register_bridge = lambda exe="": {"ok": True, "where": ["test"], "path": "", "note": ""}
+        try:
+            self.assertNotIn(new, allowed_extension_ids())
+            code, j = self.hello(new, f"chrome-extension://{new}")
+            self.assertEqual(code, 200); self.assertTrue(j["ok"]); self.assertTrue(j["added"])
+            self.assertIn(new, allowed_extension_ids())
+            cp = config_store.read(self.p)
+            self.assertIn(new, cp.get("extension", "ids"))
+            code, j = self.hello(new, f"chrome-extension://{new}")        # second time: known, nothing added
+            self.assertEqual(code, 200); self.assertFalse(j["added"])
+        finally:
+            cli.find_config = orig_find
+
+    def test_mismatched_or_missing_origin_is_refused(self):
+        bad = "ppppppppppppppppppppppppppppppp" + "p"
+        code, _ = self.hello(bad, "chrome-extension://abcdefghijklmnopabcdefghijklmnop")
+        self.assertEqual(code, 403)
+        code, _ = self.hello(bad, "http://evil.example")
+        self.assertEqual(code, 403)
+        code, _ = self.hello(bad, None)                   # local program without Origin: still refused
+        self.assertEqual(code, 403)
+        code, _ = self.hello("short", "chrome-extension://short")
+        self.assertNotEqual(code, 200)
+        from sipphone.native_host import allowed_extension_ids
+        self.assertNotIn(bad, allowed_extension_ids())

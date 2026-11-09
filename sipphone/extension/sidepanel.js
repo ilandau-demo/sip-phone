@@ -306,9 +306,14 @@ chrome.runtime.onMessage.addListener(m => {
   } else if (!m.status.up && restarting && Date.now() - restarting < 60000) {
     if (!frame.hidden) { frame.hidden = true; waitForRestart(); }
   } else if (!m.status.up && !frame.hidden) {
-    frame.hidden = true;
-    frame.removeAttribute('src');
-    teamCfg().then(tc => { if (tc && tc.enabled) showTeam(); else { message('SIP Phone is stopped', 'Click Start to bring it back.', true); $('msg-btn').textContent = 'Start'; } });
+    // The bridge lost the app. If the app still answers over HTTP the bridge
+    // itself is what's down (it reconnects by itself) — keep the phone page.
+    appUp().then(up => {
+      if (up || frame.hidden) return;
+      frame.hidden = true;
+      frame.removeAttribute('src');
+      teamCfg().then(tc => { if (tc && tc.enabled) showTeam(); else { message('SIP Phone is stopped', 'Click Start to bring it back.', true); $('msg-btn').textContent = 'Start'; } });
+    });
   } else if (m.status.up && (frame.hidden || teamShown) && !busy) {
     $('msg-btn').textContent = 'Try again';
     show();

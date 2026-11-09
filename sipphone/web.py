@@ -589,6 +589,37 @@ def make_handler(state: UIState):
                     if not r["ok"]:
                         raise RuntimeError(r["note"] or "couldn't register the bridge")
                     return self._json({"ok": True, "where": r["where"], "path": r["path"]})
+                elif u.path == "/api/extension/hello":
+                    # A copy of the extension the bridge doesn't know yet (a Chrome
+                    # Web Store install has its own ID) introduces itself. The ID is
+                    # taken from the request's Origin — set by the browser, not the
+                    # page — and must match what the body claims; then it joins the
+                    # bridge's allow-list and the manifest is rewritten so the next
+                    # connectNative succeeds. An extension that can reach this API
+                    # already has everything the bridge offers, so nothing is gained
+                    # by making it ask a human first.
+                    from .native_host import allowed_extension_ids, register_bridge
+                    ext_id = str(body.get("id", "") or "").strip().lower()
+                    origin = (self.headers.get("Origin") or "").strip().lower().rstrip("/")
+                    if not (len(ext_id) == 32 and ext_id.isalpha()):
+                        raise RuntimeError("not an extension ID")
+                    if origin != f"chrome-extension://{ext_id}":
+                        return self._forbid("extension ID doesn't match the request origin")
+                    added = False
+                    if ext_id not in allowed_extension_ids():
+                        if state.settings is None:
+                            raise RuntimeError("Settings are not available in this mode")
+                        from . import config_store
+                        cp = config_store.read(state.settings.path)
+                        cur = cp.get("extension", "ids", fallback="") if cp.has_section("extension") else ""
+                        ids = [t.strip() for t in cur.replace(";", ",").split(",") if t.strip()]
+                        ids.append(ext_id)
+                        config_store.update(state.settings.path, {"extension": {"ids": ",".join(ids)}})
+                        added = True
+                        log.info("browser extension %s added to the bridge allow-list", ext_id)
+                    r = register_bridge()
+                    return self._json({"ok": bool(r["ok"]), "added": added, "known": True,
+                                       "registered": bool(r["ok"]), "note": r.get("note", "")})
                 elif u.path == "/api/extension/open":
                     from . import extension_sync as ext
                     page = ext.open_extensions_page()

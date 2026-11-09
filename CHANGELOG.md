@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.5 — 2026-11-08
+- Browser extension installed from the Chrome Web Store now connects to the
+  desktop app by itself: when Chrome refuses the bridge because the copy's ID
+  is unknown, the extension introduces itself to the running app
+  (`POST /api/extension/hello`, origin-checked), the app adds the ID to
+  `[extension] ids` and rewrites the bridge manifest, and the extension
+  reconnects. No more pasting the store ID into Settings.
+- Side panel no longer flips to "SIP Phone is stopped" while the app still
+  answers over HTTP (bridge hiccups reconnect quietly); the bridge needs two
+  failed polls in a row (5 s timeout each) before reporting the app down, and
+  logs why in native-host.log.
+- `--diagnose` reads the app's per-user config even when run from a folder
+  that has none.
+
 ## 2.4.4 — 2026-11-08
 - Start-menu and start-at-sign-in shortcuts now run `pythonw -m sipphone.app`
   instead of the pip-made `sipphone-app.exe` launcher, which stops working
