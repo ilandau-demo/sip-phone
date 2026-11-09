@@ -1,17 +1,5 @@
 # sipphone — a SIP 2.0 softphone for Nextiva (and any standard SIP platform)
 
-A small, readable SIP/2.0 (RFC 3261) user agent written in plain Python. No PJSIP,
-no native build step — the SIP stack, Digest auth, SDP, RTP and G.711 codec are all
-in this repo so you can see and change exactly what goes on the wire.
-
-**Tested:** Digest-challenged REGISTER, outbound INVITE → 100/180/200/ACK, CANCEL,
-BYE in both directions, inbound call answer/reject, OPTIONS keep-alive, G.711
-µ-law/A-law round trip, RFC 4733 DTMF, 200-OK retransmission until ACK.
-
-```
-python3 -m unittest tests.test_flows -v      # 13 tests, ~6 s, no network needed
-```
-
 ## Get started (for people who just want to use it)
 
 **Team view only (no install):** add the **SIP Phone** extension from the
