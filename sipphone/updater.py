@@ -281,6 +281,11 @@ for _ in range(120):                      # Chrome lets the bridge go once it se
 else:
     say("still running - stopping it"); kill("sipphone-native-host.exe"); kill("sipphone-app.exe"); time.sleep(1)
 cmd = [py, "-m", "pip", "install", "--upgrade", "--no-warn-script-location", "--disable-pip-version-check", wheel]
+if a.get("--same") == "1":
+    # a rebuilt wheel with the version already installed: pip would call it
+    # "already satisfied" and change nothing, so replace the package's files
+    # (dependencies are already in place)
+    cmd[4:4] = ["--force-reinstall", "--no-deps"]
 ok, err = False, ""
 for attempt in range(1, 5):
     say("pip attempt %d" % attempt)
@@ -320,7 +325,7 @@ def launch_helper(wheel: str, version: str, port: int) -> str:
     cmd = [pythonw(), helper, "--wheel", wheel, "--port", str(port), "--lock", lock_path(),
            "--log", logp, "--result", os.path.join(d, RESULT_NAME),
            "--app", os.environ.get("SIPPHONE_APP_EXE", ""),            # tests only
-           "--version", version]
+           "--version", version, "--same", "1" if version == __version__ else "0"]
     if os.environ.get("SIPPHONE_HELPER_CMD"):                 # tests
         cmd = json.loads(os.environ["SIPPHONE_HELPER_CMD"]) + cmd[2:]
     kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
@@ -456,7 +461,7 @@ class UpdateManager:
         """Hand a staged wheel to the helper and quit. Raises on refusal."""
         if self.on_quit is None:
             raise RuntimeError("Updates install from the Nextiva Companion desktop app (Start menu), not from a terminal session. "
-                               f"Run:  python -m pip install --upgrade \"{path}\"")
+                               f"Run:  python -m pip install --upgrade --force-reinstall --no-deps \"{path}\"")
         if self.busy():
             raise RuntimeError("A call is active — try again after it ends")
         if updating():

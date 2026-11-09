@@ -40,6 +40,8 @@
   the first channel landed on (TLS still verified against the name) and any
   balancer cookie from the channel reply is sent back on every request. A 404
   names the channel and server in the log and reopens at once.
+- In-app updates reinstall a rebuilt wheel that has the version already
+  installed (pip alone reports "already installed" and changes nothing).
 - Example config cleaned of the retired BLF options.
 - Extension files unchanged — the store package is a version bump only.
 
