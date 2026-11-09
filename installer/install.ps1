@@ -1,4 +1,4 @@
-# SIP Phone installer - run via Install.bat (double-click), or from PowerShell:
+# Nextiva Companion App installer - run via Install.bat (double-click), or from PowerShell:
 #   powershell -ExecutionPolicy Bypass -File install.ps1 [-Quiet] [-NoTTS] [-STT] [-NoExtension]
 #                                                        [-NoStartup] [-Mode phone|presence]
 #                                                        [-UpdateSource <folder, share or https URL>]
@@ -55,7 +55,7 @@ function Pause-Exit($code) {
 }
 
 Write-Host ""
-Write-Host "=== SIP Phone installer ===" -ForegroundColor Cyan
+Write-Host "=== Nextiva Companion App installer ===" -ForegroundColor Cyan
 Write-Host ("PowerShell " + $PSVersionTable.PSVersion + "  -  " + (Get-Date))
 Write-Host ("Folder: " + $here)
 
@@ -63,7 +63,7 @@ Step "0. Checking the files"
 # 0. Is this the extracted folder? (double-clicking inside the zip gives a lone temp copy)
 $whl = Get-ChildItem $here -Filter 'sipphone-*.whl' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
 if (-not $whl) {
-    Write-Host "The SIP Phone files aren't next to this installer." -ForegroundColor Red
+    Write-Host "The Nextiva Companion App files aren't next to this installer." -ForegroundColor Red
     if ($here -like '*\Temp\*') {
         Write-Host "It looks like Install.bat was run from inside the .zip. Right-click the zip, choose"
         Write-Host "'Extract All...', open the extracted folder, then double-click Install.bat there."
@@ -186,7 +186,7 @@ if ($LASTEXITCODE -ne 0) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         $manifest = Join-Path $dir 'com.sipphone.host.json'
         $origins = @($ids | ForEach-Object { "chrome-extension://$_/" })
-        [ordered]@{ name = $info.name; description = 'SIP Phone bridge'; path = $info.path;
+        [ordered]@{ name = $info.name; description = 'Nextiva Companion App bridge'; path = $info.path;
                     type = 'stdio'; allowed_origins = $origins } | ConvertTo-Json | Set-Content -Encoding ascii $manifest
         foreach ($k in $BridgeKeys) {
             New-Item -Force -Path $k | Out-Null
@@ -217,37 +217,37 @@ if (Test-Path (Join-Path $extDir 'manifest.json')) {
     if ($storeId) {
         if ($Quiet) {
             Write-Host "Chrome/Edge extension: install it from $StoreUrl"
-        } elseif (Ask "`nAdd SIP Phone to Chrome/Edge from the Chrome Web Store (side panel, click-to-call, call pop-ups)?" $true) {
+        } elseif (Ask "`nAdd Nextiva Companion App to Chrome/Edge from the Chrome Web Store (side panel, click-to-call, call pop-ups)?" $true) {
             Start-Process $StoreUrl
             Write-Host ""
             Write-Host "The store page opened in your browser." -ForegroundColor Cyan
             Write-Host "  1. Click 'Add to Chrome' (Edge: allow extensions from other stores if asked)."
-            Write-Host "  2. Pin SIP Phone from the puzzle-piece menu."
+            Write-Host "  2. Pin Nextiva Companion App from the puzzle-piece menu."
             Read-Host "`nPress Enter when that's done" | Out-Null
         }
     } elseif ($Quiet) {
         Invoke-Py -c "from sipphone.extension_sync import sync, write_zip; sync(); print(write_zip())"
         Write-Host "Chrome/Edge extension: drop the zip above onto chrome://extensions (Developer mode on), or Load unpacked $extDir"
-    } elseif (Ask "`nAdd SIP Phone to Chrome/Edge (side panel, click-to-call, call pop-ups)?" $true) {
+    } elseif (Ask "`nAdd Nextiva Companion App to Chrome/Edge (side panel, click-to-call, call pop-ups)?" $true) {
         Write-Host ""
         Invoke-Py -m sipphone --extension
         Write-Host ""
         Write-Host "Two windows opened: the browser's Extensions page and a folder with the zip selected." -ForegroundColor Cyan
         Write-Host "  1. On the Extensions page turn on 'Developer mode' (top right; left side in Edge)."
         Write-Host "  2. Drag the selected zip onto the Extensions page."
-        Write-Host "  3. Pin SIP Phone from the puzzle-piece menu."
+        Write-Host "  3. Pin Nextiva Companion App from the puzzle-piece menu."
         Read-Host "`nPress Enter when that's done" | Out-Null
     }
 }
 
 Step "8. Start at sign-in"
 # 8. Start at sign-in (runs in the background; the extension finds it running)
-if (-not $NoStartup -and (Ask "`nStart SIP Phone automatically when you sign in to Windows?" $true)) {
+if (-not $NoStartup -and (Ask "`nStart Nextiva Companion App automatically when you sign in to Windows?" $true)) {
     Invoke-Py -m sipphone --startup on | Out-Null
     Write-Host "Start at sign-in: on"
 }
 
-Step "9. Starting SIP Phone"
+Step "9. Starting Nextiva Companion App"
 # 9. Start the phone. On a new install its Settings screen opens for the details.
 try {
     # Start through pythonw (what the Start-menu shortcut does too) - the pip exe
@@ -256,7 +256,7 @@ try {
     if (Test-Path $pyw) {
         $appArgs = @('-m', 'sipphone.app'); if ($Quiet) { $appArgs += '--no-browser' }
         Start-Process -FilePath $pyw -ArgumentList $appArgs
-        Write-Host "`nStarting SIP Phone..."
+        Write-Host "`nStarting Nextiva Companion App..."
     }
 } catch { }
 
@@ -264,10 +264,10 @@ $ver = (Invoke-Py -m sipphone --version 2>$null)
 Write-Host ""
 Write-Host "Done - $ver installed." -ForegroundColor Green
 if (-not $Quiet) {
-    Write-Host "SIP Phone opens in your browser. Choose 'Phone + Team view' or 'Team view only' in its"
+    Write-Host "Nextiva Companion App opens in your browser. Choose 'Phone + Team view' or 'Team view only' in its"
     Write-Host "Settings screen and fill in the details it asks for."
 }
-Write-Host "Next time, start it from 'SIP Phone' in the Start menu (or the browser extension)."
+Write-Host "Next time, start it from 'Nextiva Companion App' in the Start menu (or the browser extension)."
 Write-Host "Updates: Settings > Updates > 'Install from file', or run the new Install.bat."
 Write-Host "Browser extension later: Settings > Browser extension, or run   python -m sipphone --extension"
 Pause-Exit 0

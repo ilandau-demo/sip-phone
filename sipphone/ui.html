@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SIP Phone</title>
+<title>Nextiva Companion App</title>
 <style>
   :root {
     --bench: #E6EAE4;
@@ -455,14 +455,14 @@
 <body>
 <div class="app">
   <header class="top">
-    <h1>SIP Phone <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
+    <h1>Nextiva Companion App <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
     <div class="reg" id="reg"><span class="dot"></span><span id="regtext">Connecting…</span></div>
     <button class="ghost" id="reregister" title="Register again now">Re-register</button>
     <button class="ghost gear" id="btn-settings" title="Settings: your SIP account, Team view, voice and audio" aria-label="Settings" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span class="gl">Settings</span></button>
     <button class="ghost" id="quit" title="Stop the phone and close" hidden>Quit</button>
   </header>
   <div class="warnbar" id="warnbar" hidden></div>
-  <div class="updbar" id="updbar" hidden><span>SIP Phone <b id="upd-ver"></b> is available.</span><button type="button" id="upd-install">Install now</button><button type="button" class="link" id="upd-more">What's new</button></div>
+  <div class="updbar" id="updbar" hidden><span>Nextiva Companion App <b id="upd-ver"></b> is available.</span><button type="button" id="upd-install">Install now</button><button type="button" class="link" id="upd-more">What's new</button></div>
 
   <section class="dialer" aria-label="Dialer">
     <input class="number" id="number" placeholder="Enter a number" inputmode="tel" autocomplete="off" spellcheck="false">
@@ -660,10 +660,10 @@
 <dialog id="sdlg" class="settings" aria-labelledby="s-title">
   <div class="s-head"><h2 id="s-title">Settings</h2><button type="button" id="s-close" aria-label="Close settings">×</button></div>
   <div class="s-body">
-    <p class="s-welcome" id="s-welcome" hidden>Welcome! Choose how you'll use SIP Phone, fill in what it asks for, and click Save. You can change anything here later.</p>
+    <p class="s-welcome" id="s-welcome" hidden>Welcome! Choose how you'll use Nextiva Companion App, fill in what it asks for, and click Save. You can change anything here later.</p>
 
     <section class="s-sec">
-      <h3>Use SIP Phone as</h3>
+      <h3>Use Nextiva Companion App as</h3>
       <div class="mode-pick">
         <label><input type="radio" name="appmode" value="phone" data-k="app.mode"><b>Phone + Team view</b><small>Registers your SIP line: make and take calls, text-to-speech, transfers, pick-ups.</small></label>
         <label><input type="radio" name="appmode" value="presence"><b>Team view only</b><small>Just the presence board. No phone line is registered and nothing can be called.</small></label>
@@ -744,7 +744,7 @@
 
     <section class="s-sec">
       <h3>Startup</h3>
-      <label class="s-field check"><input type="checkbox" data-k="app.start_with_windows"><span>Start SIP Phone when I sign in<small style="display:block;color:var(--ink-2)">Runs in the background, so the browser extension and the Start-menu shortcut find it already running.</small></span></label>
+      <label class="s-field check"><input type="checkbox" data-k="app.start_with_windows"><span>Start Nextiva Companion App when I sign in<small style="display:block;color:var(--ink-2)">Runs in the background, so the browser extension and the Start-menu shortcut find it already running.</small></span></label>
       <label class="s-field check"><input type="checkbox" data-k="app.debug"><span>Write a full SIP trace to app.log<small style="display:block;color:var(--ink-2)">For troubleshooting registration or Team view with support. Needs a restart; turn it off afterwards.</small></span></label>
     </section>
 
@@ -755,13 +755,13 @@
       <ol class="s-steps">
         <li>On the extensions page, turn on <b>Developer mode</b>.</li>
         <li>Drag the downloaded zip onto that page.</li>
-        <li>Pin SIP Phone from the puzzle-piece menu.</li>
+        <li>Pin Nextiva Companion App from the puzzle-piece menu.</li>
       </ol>
       <div class="s-test"><span id="s-ext-copies" role="status"></span></div>
       <details><summary>Custom extension build</summary>
         <label class="s-field"><span>Extra extension ID</span><input data-k="extension.store_id" spellcheck="false" placeholder="32 letters (only for a build you signed yourself)"><small>The Chrome Web Store copy and the zip/unpacked build are accepted automatically; this is only for a copy signed with your own key. Applies immediately.</small></label>
       </details>
-      <small class="s-note">When the extension files change, SIP Phone saves a new zip to Downloads and the extension asks you to drop it again. Alternative: "Load unpacked" with the folder <code id="s-ext-folder"></code> — that copy updates itself.</small>
+      <small class="s-note">When the extension files change, Nextiva Companion App saves a new zip to Downloads and the extension asks you to drop it again. Alternative: "Load unpacked" with the folder <code id="s-ext-folder"></code> — that copy updates itself.</small>
       <div class="s-test" style="margin-top:10px"><span id="s-bridge" role="status"></span><button type="button" id="s-bridge-fix" hidden>Connect now</button></div>
       <div class="s-upd-msg" id="s-ext-msg"></div>
     </section>
@@ -771,7 +771,7 @@
       <div class="s-ver"><span>Version <b id="s-cur-ver"></b><span id="s-avail"></span></span><span><button type="button" id="s-check" hidden>Check now</button> <span class="s-file"><label for="s-file">Install from file…</label><input type="file" id="s-file" accept=".whl,.zip"></span></span></div>
       <div class="s-upd-msg" id="s-upd-msg"></div>
       <details><summary>Update source (for teams)</summary>
-        <label class="s-field"><span>Folder, network share or https:// address</span><input data-k="update.source" spellcheck="false" placeholder="e.g. \\server\share\sipphone"><small>Drop new sipphone-*.whl files there (or host a latest.json) and every copy of SIP Phone offers the update.</small></label>
+        <label class="s-field"><span>Folder, network share or https:// address</span><input data-k="update.source" spellcheck="false" placeholder="e.g. \\server\share\sipphone"><small>Drop new sipphone-*.whl files there (or host a latest.json) and every copy of Nextiva Companion App offers the update.</small></label>
         <label class="s-field check"><input type="checkbox" data-k="update.auto"><span>Install updates automatically when no call is active</span></label>
       </details>
     </section>
@@ -815,7 +815,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   $('btn-answer').onclick = () => api('/api/answer').catch(() => {});
   $('btn-hang').onclick = () => api('/api/hangup').catch(() => {});
   $('reregister').onclick = () => api('/api/register').catch(() => {});
-  $('quit').onclick = () => { if (!inCall() || confirm('A call is active. Hang up and quit?')) api('/api/quit').then(() => { document.title = 'SIP Phone stopped'; }).catch(() => {}); };
+  $('quit').onclick = () => { if (!inCall() || confirm('A call is active. Hang up and quit?')) api('/api/quit').then(() => { document.title = 'Nextiva Companion App stopped'; }).catch(() => {}); };
   $('btn-hold').onclick = () => api('/api/hold').catch(() => {});
   $('btn-mute').onclick = () => api('/api/mute').catch(() => {});
   $('btn-transfer').onclick = () => {
@@ -1317,7 +1317,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = '<b></b> '; t.querySelector('b').textContent = n.name; t.appendChild(document.createTextNode(n.text.replace(n.name, '').trim()));
       $('toasts').appendChild(t); setTimeout(() => t.remove(), 8000);
       if (n.sound !== false) beep();
-      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) { try { new Notification('SIP Phone', {body: n.text}); } catch (e) {} }
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) { try { new Notification('Nextiva Companion App', {body: n.text}); } catch (e) {} }
       watchRules = Object.fromEntries(Object.entries(watchRules).filter(([k]) => k !== n.user_id || (watchRules[k].events || []).length > 1)); teamSig = '';
     }
   };
@@ -1543,7 +1543,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const b = x.bridge || {}, el = $('s-bridge');
       el.className = b.registered ? 'ok' : 'bad';
       el.textContent = b.registered ? 'Browser link: ready (the extension can reach this app).'
-        : !b.exe_ok ? 'Browser link: the bridge program is missing — reinstall SIP Phone.'
+        : !b.exe_ok ? 'Browser link: the bridge program is missing — reinstall Nextiva Companion App.'
         : b.can_register ? 'Browser link: not registered yet.' : 'Browser link: needs Install.bat once (this Python can\u2019t write the registry).';
       $('s-bridge-fix').hidden = b.registered || !b.can_register || !b.exe_ok;
       const c = x.connected, known = (x.known || []).map(k => k.kind).join(' and ');
@@ -1791,7 +1791,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const av = u && u.available;
     $('s-avail').textContent = av ? ` · ${av.version} available` : '';
     if (!$('s-updates').dataset.touched) {
-      updMsg(!u ? 'Updates install from the SIP Phone app.' :
+      updMsg(!u ? 'Updates install from the Nextiva Companion desktop app.' :
              u.state === 'installing' ? 'Installing…' :
              !u.can_install ? 'Running from a terminal: install updates with pip.' :
              u.last_error ? 'Last check failed: ' + u.last_error :
@@ -1811,7 +1811,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       try { const r = await fetch('/api/version', {cache: 'no-store'}); if (r.ok) { location.reload(); return; } } catch (e) {}
       await new Promise(r => setTimeout(r, 1000));
     }
-    sMsg(label + ' is taking longer than expected. Open SIP Phone from the Start menu to check.', 'bad');
+    sMsg(label + ' is taking longer than expected. Open Nextiva Companion App from the Start menu to check.', 'bad');
   };
   const installUpdate = async (how) => {
     if (inCall() && !confirm('A call is active. Hang up and update?')) return;
@@ -1829,7 +1829,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     } catch (e) { updMsg('Update failed: ' + e.message, 'bad'); return; }
     if (j.error) { updMsg(j.error, 'bad'); return; }
     if (j.staged) { updMsg(j.message, 'ok'); return; }
-    updMsg(`Installing ${j.version}… SIP Phone restarts by itself (about a minute).`, 'ok');
+    updMsg(`Installing ${j.version}… Nextiva Companion App restarts by itself (about a minute).`, 'ok');
     $('updbar').hidden = true;
     if (!sdlg.open) sdlg.showModal();
     sMsg(`Installing ${j.version}…`);
@@ -1876,7 +1876,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       try { const r = await fetch('/api/version', {cache: 'no-store'}); if (r.ok) { location.reload(); return; } } catch (e) {}
       await new Promise(r => setTimeout(r, 700));
     }
-    sMsg('The phone didn’t come back. Open SIP Phone from the Start menu.', 'bad');
+    sMsg('The phone didn’t come back. Open Nextiva Companion App from the Start menu.', 'bad');
   };
   $('s-restart-btn').onclick = doRestart;
   // the extension's options page / side panel can ask for Settings
@@ -2014,8 +2014,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     for (const ev of s.events) { addMsg(ev); lastEvent = ev.id; }
     showNotifications(s.notifications);
     if (s.events.some(e => e.kind === 'event' && e.text.startsWith('Incoming')) && document.hidden) {
-      document.title = '● Incoming call — SIP Phone';
-    } else if (!call || call.state !== 'incoming') document.title = 'SIP Phone';
+      document.title = '● Incoming call — Nextiva Companion App';
+    } else if (!call || call.state !== 'incoming') document.title = 'Nextiva Companion App';
   };
 
   // ---- live updates: pushed over /api/stream; polling only as the fallback ----
@@ -2024,7 +2024,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     pollTimer = null;
     if (streamLive) return;
     try { render(await (await fetch('/api/state?since=' + lastEvent)).json()); }
-    catch (e) { $('regtext').textContent = document.title === 'SIP Phone stopped' ? 'Phone stopped — launch SIP Phone again to reconnect' : 'SIP Phone is not reachable'; $('reg').className = 'reg off'; }
+    catch (e) { $('regtext').textContent = document.title === 'Nextiva Companion App stopped' ? 'Phone stopped — launch Nextiva Companion App again to reconnect' : 'Nextiva Companion App is not reachable'; $('reg').className = 'reg off'; }
     if (!streamLive) pollTimer = setTimeout(poll, call && call.state === 'connected' ? 500 : 800);
   };
   const startPolling = () => { if (!pollTimer) poll(); if (!teamTimer && curTab === 'team') teamTimer = setInterval(loadTeam, 1000); if (!teamTimer && curTab.startsWith('board:')) teamTimer = setInterval(loadBoard, 1000); };

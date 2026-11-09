@@ -1,4 +1,4 @@
-# SIP Phone — Chrome/Edge extension (2.4.0: Team Presence Only built in; Option A bridge since 1.6.0)
+# Nextiva Companion App — Chrome/Edge extension (2.4.0: Team Presence Only built in; Option A bridge since 1.6.0)
 
 ## 2.4.0: Team Presence Only (Option C, built — formerly "planned")
 Works with no desktop app, no Python, no native messaging, no local models.
@@ -82,7 +82,7 @@ Works with no desktop app, no Python, no native messaging, no local models.
 
 ## How it works (Option A, with the app)
 Side panel embeds `http://127.0.0.1:8088/?embed=1`; badge RING / ON / OFF / "!";
-Answer/Decline notifications; right-click **Call "…" with SIP Phone**; Options
+Answer/Decline notifications; right-click **Call "…" with Nextiva Companion App**; Options
 page: incoming-call alerts, teammate-ringing alerts, spoken availability
 notifications, Open settings. Bridge = native messaging host `com.sipphone.host`
 (`sipphone-native-host.exe`), registered by the app itself (2.2.0). Local API

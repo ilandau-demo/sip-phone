@@ -508,7 +508,7 @@ def make_handler(state: UIState):
             if ctype != "multipart/form-data":
                 return self._forbid("Content-Type must be multipart/form-data")
             if n > updater.MAX_WHEEL + 10_000:
-                return self._json({"error": "That file is too large to be a SIP Phone update"}, 413)
+                return self._json({"error": "That file is too large to be a Nextiva Companion App update"}, 413)
             raw = self.rfile.read(n)
             from email.parser import BytesParser
             from email.policy import default as _policy
@@ -845,7 +845,7 @@ def make_handler(state: UIState):
                     return self._json(state.settings.test_admin(body.get("values", body)))
                 elif u.path == "/api/restart":
                     if state.settings is None or state.settings.on_restart is None:
-                        raise RuntimeError("Restart isn't available here — close and reopen SIP Phone")
+                        raise RuntimeError("Restart isn't available here — close and reopen Nextiva Companion App")
                     state.add("event", "Restarting…")
                     threading.Timer(0.3, state.settings.on_restart).start()
                 elif u.path == "/api/call":

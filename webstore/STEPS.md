@@ -1,4 +1,4 @@
-# Publishing the SIP Phone extension to the Chrome Web Store
+# Publishing the Nextiva Companion App extension to the Chrome Web Store
 
 Everything referenced here is in this folder (`webstore/`) of the
 [sip-phone](https://github.com/ilandau-demo/sip-phone) repository.
@@ -41,7 +41,7 @@ The listing's ID is `kghndilnhefammdeabhnjlphlmeeomno`
 It is built into the app's bridge allow-list and into `$StoreUrl` in
 `installer/install.ps1`, so Install.bat sends new users to the store and the
 store copy connects to the app on its own. Share the store link: *Add to
-Chrome* → pin SIP Phone. Presence-only users are done; phone users also run
+Chrome* → pin Nextiva Companion App. Presence-only users are done; phone users also run
 Install.bat from `releases/2.5.0/SIP-Phone-2.5.0.zip`.
 
 ## Updating the extension later
@@ -55,5 +55,5 @@ updates everyone automatically within a few hours.
 - *Why `https://*/*` as an optional permission?* The user's phone system is on
   a customer-specific host name; the permission is requested only for the one
   address the user types in team-presence mode, never silently.
-- *Why `nativeMessaging`?* The extension is a front end for the SIP Phone desktop
+- *Why `nativeMessaging`?* The extension is a front end for the Nextiva Companion desktop
   app on the same computer; nothing is sent to any other server.

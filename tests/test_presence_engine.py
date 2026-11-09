@@ -325,3 +325,59 @@ class ThroughputTests(unittest.TestCase):
             self.assertEqual(mon2.client.ack_path, "/com.broadsoft.async/com.broadsoft.xsi-events/v2.0/channel/eventresponse")
         finally:
             mon2.stop(); mock.stop()
+
+
+class ClusterTests(unittest.TestCase):
+    """xsi.nextiva.com-style front ends: several Xsps behind one name. Heartbeats
+    and acks must reach the server holding the channel, or it answers 404."""
+
+    def setUp(self):
+        pm.HEARTBEAT = 0.3
+        self.d = tempfile.mkdtemp()
+
+    def tearDown(self):
+        pm.HEARTBEAT = 15.0
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_heartbeats_carry_the_node_cookie(self):
+        mock = MockXsi(TEAM); mock.sticky_cookie = True
+        mon = PresenceManager(user_creds(mock), cache_path=os.path.join(self.d, "c.json"))
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+            hb = mock.heartbeats
+            self.assertTrue(wait(lambda: mock.heartbeats >= hb + 4, 5))
+            snap = mon.snapshot()
+            self.assertTrue(snap["connected"]); self.assertFalse(snap["stale"])
+            self.assertEqual(mon.reconnects, [])
+            self.assertEqual(mon.client.cookies.get("XSPNODE"), "node-a")
+        finally:
+            mon.stop(); mock.stop()
+
+    def test_everything_after_the_channel_goes_to_the_same_server(self):
+        import socket as S
+        from sipphone.presence import connection as C
+        mock = MockXsi(TEAM)
+        mock_host = mock.base.replace("127.0.0.1", "localhost")      # a name, like xsi.nextiva.com
+        seen = []
+        real = S.create_connection
+        def spy(addr, *a, **k):
+            seen.append(addr[0]); return real(addr, *a, **k)
+        C.socket.create_connection = spy
+        try:
+            creds = UserCredentials(USER, PW, host=mock_host, verify_tls=False)
+            mon = PresenceManager(creds, cache_path=os.path.join(self.d, "p.json"))
+            mon.start()
+            try:
+                self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+                self.assertEqual(mon.client.stream_ip, "127.0.0.1")
+                n = len(seen)
+                mock.push(ALICE, "CallReceivedEvent", call_xml("p1", "Alerting"))
+                self.assertTrue(wait(lambda: mock.acks, 5))
+                time.sleep(0.8)                                       # heartbeats
+                self.assertTrue(seen[n:] == [] or set(seen[n:]) == {"127.0.0.1"}, seen[n:])
+            finally:
+                mon.stop()
+        finally:
+            C.socket.create_connection = real
+            mock.stop()

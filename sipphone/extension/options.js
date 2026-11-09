@@ -15,8 +15,8 @@ for (const k of ids) {
   });
 }
 fetch(chrome.runtime.getURL('install.json')).then(r => r.json()).then(i => {
-  const how = { zip: 'installed from a zip (drag a new zip onto chrome://extensions when SIP Phone asks)',
-                bundle: 'loaded from the download folder (drag the new zip onto chrome://extensions when SIP Phone asks)',
+  const how = { zip: 'installed from a zip (drag a new zip onto chrome://extensions when Nextiva Companion App asks)',
+                bundle: 'loaded from the download folder (drag the new zip onto chrome://extensions when Nextiva Companion App asks)',
                 folder: 'loaded from the SIP Phone Extension folder (updates itself)',
                 store: 'installed from the store (updates itself)' }[i.via] || i.via;
   const el = document.createElement('div'); el.id = 'how'; el.style.cssText = 'margin-top:8px;font-size:13px;color:#51656B';
@@ -38,6 +38,6 @@ document.getElementById('open-settings').addEventListener('click', () => {
   const opened = winId !== null ? chrome.sidePanel.open({ windowId: winId }) : Promise.reject();
   chrome.storage.session.set({ openSettings: Date.now() });
   opened.catch(() => {
-    document.getElementById('saved').textContent = 'Click the SIP Phone toolbar icon, then the gear (⚙) at the top.';
+    document.getElementById('saved').textContent = 'Click the Nextiva Companion App toolbar icon, then the gear (⚙) at the top.';
   });
 });

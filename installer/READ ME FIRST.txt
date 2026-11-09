@@ -23,10 +23,10 @@ QUICK START
   2. Double-click  Install.bat  and answer its questions (Enter = the default).
        - If Windows says "Windows protected your PC": More info > Run anyway.
        - No Python on this PC? The installer offers to install it.
-  3. SIP Phone opens in your browser with its Settings screen. Pick
+  3. Nextiva Companion App opens in your browser with its Settings screen. Pick
      "Phone + Team view" or "Team view only", fill in the details below, Save.
 
-  That's it. Start it later from "SIP Phone" in the Start menu (right-click >
+  That's it. Start it later from "Nextiva Companion App" in the Start menu (right-click >
   Pin to Start), or from the browser extension.
 
 
@@ -111,13 +111,13 @@ THE BROWSER EXTENSION (Chrome or Edge)
   From the Chrome Web Store (recommended):
       https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno
       Install.bat opens that page - click "Add to Chrome" (Edge: allow
-      extensions from other stores), then pin SIP Phone from the puzzle-piece
+      extensions from other stores), then pin Nextiva Companion App from the puzzle-piece
       menu. It updates itself and connects to the app with no further setup.
 
   From this folder (no store):
       Install.bat saves "SIP Phone Browser Extension.zip" to Downloads and
       opens the browser's Extensions page: turn on Developer mode, drag the
-      zip onto the page, pin SIP Phone. When the app updates the extension it
+      zip onto the page, pin Nextiva Companion App. When the app updates the extension it
       saves a new zip and asks you to drop it again.
 
 
@@ -138,7 +138,7 @@ THE BROWSER EXTENSION (Chrome or Edge)
     1. Open  chrome://extensions   (Edge: edge://extensions)
     2. Turn on "Developer mode" (top right in Chrome; left side in Edge)
     3. Drag  SIP Phone Browser Extension.zip  from this folder onto that page
-    4. Click the puzzle-piece icon in the toolbar and pin "SIP Phone"
+    4. Click the puzzle-piece icon in the toolbar and pin "Nextiva Companion App"
   (Install.bat offers to open both windows for you when you answer Y. Prefer
   "Load unpacked"? Choose the  Browser Extension  folder in here, or the
   self-updating one at C:\Users\<you>\SIP Phone Extension.)
@@ -183,7 +183,7 @@ USING IT
     Transfer (blind), Warm (talk to them first) or Conf (3-way).
   - Type in the box at the bottom and press Enter - the caller hears it.
   - Quick phrases above the box send with one click ("Edit phrases" to change).
-  - "Start SIP Phone when I sign in" (Settings > Startup) keeps it running in
+  - "Start Nextiva Companion App when I sign in" (Settings > Startup) keeps it running in
     the background so the extension always finds it.
 
 
@@ -212,8 +212,8 @@ TROUBLESHOOTING
       monitoring rights (ask your provider). "acknowledgements failing" = the
       server refuses event responses; presence lags until it accepts them.
 
-  Extension says "Install the SIP Phone app"
-      The browser can't find the bridge. Start SIP Phone once (it registers the
+  Extension says "Install the Nextiva Companion desktop app"
+      The browser can't find the bridge. Start Nextiva Companion App once (it registers the
       bridge on every start) and check Settings > Browser extension says
       "Browser link: ready"; if not, click "Connect now" - or run Install.bat.
 

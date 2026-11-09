@@ -6,7 +6,7 @@
   If an instance is already running it just brings the UI up in the browser.
 
 * ``sipphone --install-shortcut``
-  Creates "SIP Phone" in the Start menu (Programs folder) pointing at
+  Creates "Nextiva Companion App" in the Start menu (Programs folder) pointing at
   sipphone-app.exe with the bundled icon, so it can be pinned to Start/taskbar.
 """
 from __future__ import annotations
@@ -97,7 +97,19 @@ def install_shortcut() -> str:
     if real.returncode == 0 and real.stdout.strip():
         programs = real.stdout.strip()
     os.makedirs(programs, exist_ok=True)
-    return _write_shortcut(os.path.join(programs, "SIP Phone.lnk"), "SIP softphone with text-to-speech")
+    _remove_legacy(programs)
+    return _write_shortcut(os.path.join(programs, "Nextiva Companion App.lnk"), "SIP softphone with text-to-speech")
+
+
+LEGACY_LNK = "SIP Phone.lnk"          # the name before 2.5.0; replaced, never left beside the new one
+
+
+def _remove_legacy(folder: str) -> bool:
+    try:
+        os.remove(os.path.join(folder, LEGACY_LNK))
+        return True
+    except OSError:
+        return False
 
 
 def _startup_entry() -> str:
@@ -107,19 +119,31 @@ def _startup_entry() -> str:
                                "[Environment]::GetFolderPath('Startup')"], capture_output=True, text=True)
         folder = real.stdout.strip() if real.returncode == 0 and real.stdout.strip() else \
             os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-        return os.path.join(folder, "SIP Phone.lnk")
+        return os.path.join(folder, "Nextiva Companion App.lnk")
     return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
                         "autostart", "sipphone.desktop")
 
 
 def starts_with_windows() -> bool:
-    return os.path.isfile(_startup_entry())
+    entry = _startup_entry()
+    if os.path.isfile(entry):
+        return True
+    # set up before the rename: still counts, and is migrated to the new name
+    if sys.platform == "win32" and os.path.isfile(os.path.join(os.path.dirname(entry), LEGACY_LNK)):
+        try:
+            set_start_with_windows(True)
+        except Exception:
+            return True
+        return True
+    return False
 
 
 def set_start_with_windows(on: bool) -> str:
     """Add/remove the sign-in autostart entry (the phone starts without a browser
     tab, so the extension and the Start-menu shortcut find it already running)."""
     entry = _startup_entry()
+    if sys.platform == "win32":
+        _remove_legacy(os.path.dirname(entry))
     if not on:
         try:
             os.remove(entry)
@@ -128,11 +152,11 @@ def set_start_with_windows(on: bool) -> str:
         return entry
     os.makedirs(os.path.dirname(entry), exist_ok=True)
     if sys.platform == "win32":
-        _write_shortcut(entry, "SIP Phone (starts in the background at sign-in)", ["--no-browser"])
+        _write_shortcut(entry, "Nextiva Companion App (starts in the background at sign-in)", ["--no-browser"])
     else:
         target, arguments = shortcut_target(["--no-browser"])
         with open(entry, "w", encoding="utf-8") as f:
-            f.write("[Desktop Entry]\nType=Application\nName=SIP Phone\n"
+            f.write("[Desktop Entry]\nType=Application\nName=Nextiva Companion App\n"
                     f"Exec={target} {arguments}\nX-GNOME-Autostart-enabled=true\n")
     return entry
 
@@ -269,7 +293,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, stream=sys.stderr,
                         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s", datefmt="%H:%M:%S",
                         force=True)
-    logging.info("SIP Phone app starting; config: %s", cfg_path)
+    logging.info("Nextiva Companion desktop app starting; config: %s", cfg_path)
 
     from . import __version__
     from . import updater
@@ -329,13 +353,13 @@ def main() -> int:
             note = kill_stuck_instance(UI_PORT)
             logging.warning("port %s still busy: %s", UI_PORT, note)
         if _port_in_use(UI_PORT):
-            msg = (f"SIP Phone can't start: port {UI_PORT} is in use by another program "
+            msg = (f"Nextiva Companion App can't start: port {UI_PORT} is in use by another program "
                    f"({port_owner(UI_PORT)[1] or 'unknown'}). Close it and try again.")
             logging.error(msg)
             if sys.platform == "win32":
                 try:
                     import ctypes
-                    ctypes.windll.user32.MessageBoxW(0, msg, "SIP Phone", 0x10)
+                    ctypes.windll.user32.MessageBoxW(0, msg, "Nextiva Companion App", 0x10)
                 except Exception:
                     pass
             return 1
@@ -349,7 +373,7 @@ def main() -> int:
         if msg and msg != "0" and sys.platform == "win32":
             try:
                 import ctypes
-                ctypes.windll.user32.MessageBoxW(0, msg, "SIP Phone", 0x10)
+                ctypes.windll.user32.MessageBoxW(0, msg, "Nextiva Companion App", 0x10)
             except Exception:
                 pass
         return 1

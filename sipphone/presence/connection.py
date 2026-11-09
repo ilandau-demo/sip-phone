@@ -25,6 +25,33 @@ APP_ID = "sipphone"
 EXPIRES = 3600
 
 
+class _PinnedHTTP(http.client.HTTPConnection):
+    pin: Optional[str] = None
+
+    def connect(self):
+        if not self.pin:
+            return super().connect()
+        self.sock = socket.create_connection((self.pin, self.port), self.timeout, self.source_address)
+        try:
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    pin: Optional[str] = None
+
+    def connect(self):
+        if not self.pin:
+            return super().connect()
+        sock = socket.create_connection((self.pin, self.port), self.timeout, self.source_address)
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)   # cert checked against the name
+
+
 class Channel:
     """One open event stream of the channel set."""
 
@@ -76,6 +103,8 @@ class EventsClient:
         self.channel_set_id = channel_set_id or ("sipphone-" + uuid.uuid5(uuid.NAMESPACE_DNS, username + socket.gethostname()).hex[:12])
         self.channels: List[Channel] = []
         self.stream_netloc = ""              # the server that holds our streams (heartbeats go there)
+        self.stream_ip = ""                  # ...and its address: everything else is pinned to it
+        self.cookies: Dict[str, str] = {}    # load-balancer stickiness cookies from the channel reply
         self._ack_path = ""                  # eventresponse path that works on this Xsp
         self._pool: Dict[str, list] = {}
         self._pool_lock = threading.Lock()
@@ -110,24 +139,50 @@ class EventsClient:
             sock = getattr(conn, "sock", None)
             if sock is not None:
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            key = f"{netloc}@{self.stream_ip}" if netloc == self.netloc else netloc
             with self._pool_lock:
-                self._pool.setdefault(netloc, []).append(conn)
+                self._pool.setdefault(key, []).append(conn)
         except Exception:
             pass
 
     # -- plain requests ------------------------------------------------------------
-    def _conn(self, netloc: str = ""):
+    def _conn(self, netloc: str = "", pin: Optional[str] = None):
+        """A connection to `netloc`. With `pin` (an IP address) the TCP
+        connection goes to that server while TLS and the Host header still use
+        the name — so every request of a channel set reaches the Xsp that holds
+        the channel, even when the name resolves to several servers."""
         netloc = netloc or self.netloc
         host, _, port = netloc.partition(":")
-        if self.scheme == "https":
-            return http.client.HTTPSConnection(host, int(port) if port else 443, timeout=self.timeout, context=self._ctx)
-        return http.client.HTTPConnection(host, int(port) if port else 80, timeout=self.timeout)
+        if pin is None and netloc == self.netloc:
+            pin = self.stream_ip or None
+        cls = _PinnedHTTPS if self.scheme == "https" else _PinnedHTTP
+        kw = {"context": self._ctx} if self.scheme == "https" else {}
+        c = cls(host, int(port) if port else (443 if self.scheme == "https" else 80), timeout=self.timeout, **kw)
+        c.pin = pin
+        return c
+
+    def _headers(self) -> dict:
+        h = {"Authorization": self._auth, "Content-Type": "application/xml; charset=utf-8",
+             "Accept": "application/xml", "Connection": "keep-alive"}
+        if self.cookies:
+            h["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+        return h
+
+    def _take_cookies(self, r) -> None:
+        """Load balancers in front of a cluster of Xsps keep a client on its
+        server with a cookie; send it back on everything after the channel."""
+        for raw in (r.headers.get_all("Set-Cookie") or []) if getattr(r, "headers", None) else []:
+            kv = raw.split(";", 1)[0].strip()
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                self.cookies[k.strip()] = v.strip()
 
     def request(self, method: str, path: str, body: str = "", netloc: str = "") -> tuple:
         netloc = netloc or self.netloc
         self.requests += 1
+        key = f"{netloc}@{self.stream_ip}" if netloc == self.netloc else netloc
         with self._pool_lock:
-            lst = self._pool.setdefault(netloc, [])
+            lst = self._pool.setdefault(key, [])
             conn = lst.pop() if lst else None
         for attempt in (1, 2):
             if conn is None:
@@ -138,11 +193,10 @@ class EventsClient:
                 except Exception:
                     pass
             try:
-                conn.request(method, path, body=body.encode() if body else None,
-                             headers={"Authorization": self._auth, "Content-Type": "application/xml; charset=utf-8",
-                                      "Accept": "application/xml", "Connection": "keep-alive"})
+                conn.request(method, path, body=body.encode() if body else None, headers=self._headers())
                 r = conn.getresponse()
                 data = r.read()
+                self._take_cookies(r)
             except (http.client.HTTPException, OSError):
                 try:
                     conn.close()
@@ -156,7 +210,7 @@ class EventsClient:
                 conn.close()
             else:
                 with self._pool_lock:
-                    self._pool.setdefault(netloc, []).append(conn)
+                    self._pool.setdefault(key, []).append(conn)
             return r.status, data
         raise XSIError("request failed")
 
@@ -222,7 +276,8 @@ class EventsClient:
         for ch in list(self.channels):
             st, _ = self.request("PUT", f"{EVENTS_PATH}/channel/{ch.id}/heartbeat", netloc=self.stream_netloc)
             if st not in (200, 204):
-                raise XSIError(f"HTTP {st} on heartbeat")
+                raise XSIError(f"HTTP {st} on heartbeat (channel {ch.id} on {self.stream_ip or self.netloc}"
+                               + ("" if st != 404 else "; the server no longer knows this channel — reopening") + ")")
 
     def refresh_channel(self, expires: int = EXPIRES) -> None:
         body = f'<Channel xmlns="http://schema.broadsoft.com/xsi"><expires>{expires}</expires></Channel>'
@@ -249,13 +304,16 @@ class EventsClient:
                 f"<channelSetId>{self.channel_set_id}</channelSetId><priority>1</priority><weight>100</weight>"
                 f"<expires>{expires}</expires></Channel>")
         last = ""
+        first = not self.channels
+        if first:                                  # a new channel set: let DNS / the balancer pick the server
+            self.stream_ip = ""
+            self.cookies = {}
+            self.close_pool()
         for path in (ASYNC_PATH + "/channel", EVENTS_PATH + "/channel"):
             conn = self._conn()
             conn.timeout = read_timeout
             try:
-                conn.request("POST", path, body=body.encode(),
-                             headers={"Authorization": self._auth, "Content-Type": "application/xml; charset=utf-8",
-                                      "Accept": "application/xml", "Connection": "keep-alive"})
+                conn.request("POST", path, body=body.encode(), headers=self._headers())
                 r = conn.getresponse()
                 if r.status == 401:
                     raise XSIError("authentication failed — check the XSI user ID and password")
@@ -281,6 +339,16 @@ class EventsClient:
                     conn.close()
                     continue
                 self.stream_netloc = self.netloc
+                if first:
+                    self._take_cookies(r)
+                    try:
+                        self.stream_ip = conn.sock.getpeername()[0]
+                    except (OSError, AttributeError, IndexError):
+                        self.stream_ip = ""
+                    if self.stream_ip:
+                        log.info("event channel %s on %s (%s); pinning the channel set there%s", cid, self.netloc,
+                                 self.stream_ip, f", cookies {sorted(self.cookies)}" if self.cookies else "")
+                    self.close_pool()                  # pooled connections may point at another server
                 ch = Channel(cid, r, conn, splitter, docs[1:], time.time() + expires)
                 self.channels.append(ch)
                 return ch

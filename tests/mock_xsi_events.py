@@ -58,6 +58,8 @@ class MockXsi:
         self.ack_delay = 0.0                      # simulated server-side time per ack
         self.max_channels = 0                     # 0 = unlimited; else refuse more (HTTP 409)
         self.waiting_ack = {}                     # channelId -> eventID awaiting ack
+        self.sticky_cookie = False                # like a balanced Xsp cluster: heartbeats without the
+                                                  # node cookie land on a server that doesn't know the channel
         self.acked = set()
         self.closed = threading.Event()
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
@@ -152,6 +154,8 @@ class MockXsi:
                     cid = uuid.uuid4().hex[:8]
                     q = queue.Queue(); mock.channels[cid] = q; mock.channel_order.append(cid)
                     self.send_response(200); self.send_header("Content-Type", "application/xml")
+                    if mock.sticky_cookie:
+                        self.send_header("Set-Cookie", "XSPNODE=node-a; Path=/; HttpOnly")
                     self.send_header("Transfer-Encoding", "chunked"); self.end_headers()
                     first = f'<?xml version="1.0"?><Channel xmlns="{XSI}"><channelId>{cid}</channelId><expires>3600</expires></Channel>'.encode()
                     self._chunk(first)
@@ -210,6 +214,8 @@ class MockXsi:
                 if m:
                     mock.heartbeats += 1
                     q = mock.channels.get(m.group(1))
+                    if mock.sticky_cookie and "XSPNODE=node-a" not in (self.headers.get("Cookie") or ""):
+                        q = None                          # routed to another node: unknown channel
                     if q is None:
                         return self._xml("<nope/>", 404)
                     q.put(f'<ChannelHeartbeat xmlns="{XSI}"/>'.encode())

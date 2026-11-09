@@ -1,18 +1,21 @@
-CHROME WEB STORE LISTING - SIP Phone extension 2.5.0
+CHROME WEB STORE LISTING - Nextiva Companion App extension 2.5.0
 =====================================================
 (paste these into the Developer Dashboard; steps are in STEPS.txt)
 
-NAME
-  SIP Phone
+NAME (comes from the package's manifest - nothing to type)
+  Nextiva Companion App
 
-SUMMARY (132 characters max)
-  Your phone in the side panel: click-to-call, call pop-ups, and live team presence - with the desktop app or on its own.
+SUMMARY (132 characters max; also comes from the manifest)
+  Side-panel softphone for Nextiva: click-to-call, call alerts and your team's live presence - with the desktop app or on its own.
 
 DESCRIPTION
-  SIP Phone puts your business phone into the browser's side panel.
+  Side-panel softphone: click-to-call, incoming-call alerts, and your team's live
+  presence - with the desktop app, or on its own. Integrates with Nextiva.
 
-  With the SIP Phone desktop app installed on your computer:
-  - Right-click any phone number or tel: link and choose "Call with SIP Phone"
+  Nextiva Companion App puts your business phone into the browser's side panel.
+
+  With the Nextiva Companion desktop app installed on your computer:
+  - Right-click any phone number or tel: link and choose "Call with Nextiva Companion App"
   - Answer or decline incoming calls from a notification, even with the panel closed
   - Hold, transfer, conference, and type text that the caller hears spoken
   - Toolbar badge shows ringing, on a call, or how many teammates are on calls
@@ -24,7 +27,7 @@ DESCRIPTION
   - Ask to be told when someone becomes available, with an optional spoken alert
   - Hunt groups and queues listed as quick references
 
-  The extension talks only to the SIP Phone app on your own computer and, in
+  The extension talks only to the Nextiva Companion desktop app on your own computer and, in
   team-presence mode, to the phone-system server you enter. Nothing is sent
   anywhere else and no data is collected by the developer.
 
@@ -39,14 +42,14 @@ SMALL PROMO TILE    440x280 - optional (promo-tile-440x280.png included)
 ---------------------------------------------------------------- PRIVACY TAB
 SINGLE PURPOSE
   Operate the user's business phone from the browser: place and answer calls
-  through the SIP Phone desktop app, and show live team presence from the
+  through the Nextiva Companion desktop app, and show live team presence from the
   user's phone system.
 
 PERMISSION JUSTIFICATIONS
-  nativeMessaging   Talks to the SIP Phone desktop app on the same computer,
+  nativeMessaging   Talks to the Nextiva Companion desktop app on the same computer,
                     which is the phone engine; the extension is its front end.
   sidePanel         Shows the phone and the team view in the side panel.
-  contextMenus      Adds "Call with SIP Phone" for selected numbers and tel: links.
+  contextMenus      Adds "Call with Nextiva Companion App" for selected numbers and tel: links.
   notifications     Incoming-call Answer/Decline pop-ups, teammate-ringing alerts,
                     and "this person is now available" alerts the user asked for.
   storage           Remembers the user's preferences, notification rules and,

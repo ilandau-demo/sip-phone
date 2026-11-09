@@ -254,20 +254,20 @@ async function show() {
     await new Promise(r => setTimeout(r, 300));          // let a fresh connection report back
     const st = (await chrome.storage.session.get('hostState')).hostState || (hello && hello.hostState);
     if (st === 'updating') {
-      message('Updating SIP Phone…', 'The new version starts by itself in a moment.', false);
+      message('Updating Nextiva Companion App…', 'The new version starts by itself in a moment.', false);
       return;
     }
     if (st === 'missing') {
-      message('Install the SIP Phone app — or just watch your team',
-        'Calls, transfers and the full phone need the desktop app: run Install.bat from the SIP Phone download, then click Try again. For presence alone, nothing needs installing.',
+      message('Install the Nextiva Companion desktop app — or just watch your team',
+        'Calls, transfers and the full phone need the desktop app: run Install.bat from the Nextiva Companion App download, then click Try again. For presence alone, nothing needs installing.',
         true);
       return;
     }
-    message('Starting SIP Phone…', 'This takes a few seconds.', false);
+    message('Starting Nextiva Companion App…', 'This takes a few seconds.', false);
     const r = await chrome.runtime.sendMessage({ type: 'cmd', cmd: 'launch' });
     if (r && r.ok && await appUp()) { frame.removeAttribute('src'); await showUI(); return; }
-    message('SIP Phone didn’t start',
-      (r && r.error) || 'Open SIP Phone from the Start menu, then click Try again.', true);
+    message('Nextiva Companion App didn’t start',
+      (r && r.error) || 'Open Nextiva Companion App from the Start menu, then click Try again.', true);
   } finally {
     busy = false;
   }
@@ -281,7 +281,7 @@ window.addEventListener('message', e => {
 });
 
 async function waitForRestart() {
-  message('Restarting SIP Phone…', 'Applying your new settings.', false);
+  message('Restarting Nextiva Companion App…', 'Applying your new settings.', false);
   frame.removeAttribute('src');
   const t0 = Date.now();
   while (Date.now() - t0 < 60000) {
@@ -289,7 +289,7 @@ async function waitForRestart() {
     if (await appUp()) { restarting = 0; await showUI(); return; }
   }
   restarting = 0;
-  message('SIP Phone didn’t come back', 'Open SIP Phone from the Start menu, then click Try again.', true);
+  message('Nextiva Companion App didn’t come back', 'Open Nextiva Companion App from the Start menu, then click Try again.', true);
 }
 
 // Options page → "Open settings" while the panel is already open.
@@ -302,7 +302,7 @@ chrome.runtime.onMessage.addListener(m => {
   if (!m || m.type !== 'status') return;
   if (!m.status.up && (m.hostState === 'updating' || m.status.updating)) {
     frame.hidden = true; frame.removeAttribute('src');
-    message('Updating SIP Phone…', 'The new version starts by itself in a moment.', false);
+    message('Updating Nextiva Companion App…', 'The new version starts by itself in a moment.', false);
   } else if (!m.status.up && restarting && Date.now() - restarting < 60000) {
     if (!frame.hidden) { frame.hidden = true; waitForRestart(); }
   } else if (!m.status.up && !frame.hidden) {
@@ -312,7 +312,7 @@ chrome.runtime.onMessage.addListener(m => {
       if (up || frame.hidden) return;
       frame.hidden = true;
       frame.removeAttribute('src');
-      teamCfg().then(tc => { if (tc && tc.enabled) showTeam(); else { message('SIP Phone is stopped', 'Click Start to bring it back.', true); $('msg-btn').textContent = 'Start'; } });
+      teamCfg().then(tc => { if (tc && tc.enabled) showTeam(); else { message('Nextiva Companion App is stopped', 'Click Start to bring it back.', true); $('msg-btn').textContent = 'Start'; } });
     });
   } else if (m.status.up && (frame.hidden || teamShown) && !busy) {
     $('msg-btn').textContent = 'Try again';

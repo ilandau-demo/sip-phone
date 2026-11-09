@@ -1,6 +1,14 @@
 # Changelog
 
-## 2.5.0 — 2026-11-08 — presence in under a second
+## 2.5.0 — 2026-11-09 — presence in under a second; renamed Nextiva Companion App
+- **Renamed** to *Nextiva Companion App* everywhere people see it: Chrome Web
+  Store name and summary, toolbar tooltip, side panel, notifications, context
+  menu, the app page, Start-menu entry, installer and docs. The old "SIP
+  Phone" Start-menu and sign-in shortcuts are replaced (removed, not left
+  beside the new ones); Uninstall removes either name. Unchanged on purpose:
+  the extension ID, the Python package `sipphone`, the bridge
+  `com.sipphone.host`, the config folder and the `SIP Phone Extension` folder —
+  existing installs keep their settings and stay connected.
 - **Pushed, not polled.** The phone page and the browser bridge open one
   `/api/stream` (Server-Sent Events) and get every change pushed: Team rows,
   boards, call state, event lines, notifications. Measured on the mock
@@ -25,6 +33,13 @@
   the acknowledgement path that worked is remembered in the directory cache so
   the first ack after a restart does not probe; ack connections are warmed and
   use TCP_NODELAY.
+- **Fix: "heartbeat failed: HTTP 404" → presence going stale.** When the XSI
+  name resolves to several Xsp servers (or a balancer spreads connections),
+  heartbeats and acks sent on a new connection could reach a server that
+  doesn't hold the channel. The whole channel set is now pinned to the server
+  the first channel landed on (TLS still verified against the name) and any
+  balancer cookie from the channel reply is sent back on every request. A 404
+  names the channel and server in the log and reopens at once.
 - Example config cleaned of the retired BLF options.
 - Extension files unchanged — the store package is a version bump only.
 

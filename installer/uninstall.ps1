@@ -1,8 +1,8 @@
-# SIP Phone uninstaller - run via Uninstall.bat (double-click)
+# Nextiva Companion App uninstaller - run via Uninstall.bat (double-click)
 param([switch]$Quiet, [switch]$KeepSettings)
 $ErrorActionPreference = 'Continue'
 Write-Host ""
-Write-Host "=== SIP Phone uninstaller ===" -ForegroundColor Cyan
+Write-Host "=== Nextiva Companion App uninstaller ===" -ForegroundColor Cyan
 Write-Host ""
 
 $check = "import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)"
@@ -19,8 +19,10 @@ foreach ($exe in @('sipphone-app', 'sipphone-native-host')) {
 # sign-in autostart + Start-menu shortcut
 if ($PY) { Invoke-Py -m sipphone --startup off 2>$null | Out-Null }
 foreach ($folder in @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Startup'))) {
-    $lnk = Join-Path $folder 'SIP Phone.lnk'
-    if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue; Write-Host "Removed $lnk" }
+    foreach ($name in @('Nextiva Companion App.lnk', 'SIP Phone.lnk')) {   # current and pre-2.5.0 name
+        $lnk = Join-Path $folder $name
+        if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue; Write-Host "Removed $lnk" }
+    }
 }
 
 # browser bridge
@@ -59,5 +61,5 @@ if (-not $KeepSettings) {
         Write-Host "Settings removed"
     }
 }
-Write-Host "`nSIP Phone has been removed." -ForegroundColor Green
+Write-Host "`nNextiva Companion App has been removed." -ForegroundColor Green
 if (-not $Quiet) { Read-Host "Press Enter to close" | Out-Null }
