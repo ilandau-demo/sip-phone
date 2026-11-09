@@ -35,17 +35,14 @@ zone → Change visibility → Public). The URL to give the store is:
 4. **Distribution** tab: visibility **Unlisted**; leave the rest.
 5. **Submit for review.** Expect an email in 1–3 business days.
 
-## 4. After approval (once)
-1. Copy the item's 32-letter ID (the end of the store link
-   `…/detail/sip-phone/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`).
-2. SIP Phone → **Settings → Browser extension → Chrome Web Store extension ID**
-   → paste → Save. The app now accepts the store copy.
-3. In this repo, set `$StoreUrl` near the top of `installer/install.ps1` to the
-   store link and commit; Install.bat then sends new users to the store and
-   records the ID for them.
-4. Share the store link. *Add to Chrome* → pin SIP Phone. Presence-only users
-   are done; phone users also run Install.bat from
-   `releases/2.4.5/SIP-Phone-2.4.5.zip`.
+## 4. After approval — done
+The listing's ID is `kghndilnhefammdeabhnjlphlmeeomno`
+(https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno).
+It is built into the app's bridge allow-list and into `$StoreUrl` in
+`installer/install.ps1`, so Install.bat sends new users to the store and the
+store copy connects to the app on its own. Share the store link: *Add to
+Chrome* → pin SIP Phone. Presence-only users are done; phone users also run
+Install.bat from `releases/2.4.6/SIP-Phone-2.4.6.zip`.
 
 ## Updating the extension later
 ```

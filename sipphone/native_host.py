@@ -130,7 +130,7 @@ def host_exe_path() -> str:
 # registry; its AppData is still virtualised, so the manifest lives outside it).
 ALLOWED_EXTENSION_IDS = [
     "ekooaigkfmobhjmioleeahcanjnhhheh",      # the unpacked / zip build (fixed key)
-    # add the Chrome Web Store id here once published
+    "kghndilnhefammdeabhnjlphlmeeomno",      # the Chrome Web Store listing
 ]
 
 

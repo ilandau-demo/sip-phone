@@ -31,11 +31,11 @@ function Step($t) { Write-Host ""; Write-Host ("--- " + $t) -ForegroundColor Dar
 # Chrome/Edge extension IDs allowed to talk to the desktop app. The first is the
 # fixed ID of the "Load unpacked" build; after publishing to the Chrome Web Store
 # or Edge Add-ons, add those store IDs here and re-share the bundle.
-$ExtensionIds = @('ekooaigkfmobhjmioleeahcanjnhhheh')
+$ExtensionIds = @('ekooaigkfmobhjmioleeahcanjnhhheh', 'kghndilnhefammdeabhnjlphlmeeomno')
 # Once the extension is published on the Chrome Web Store, put its store link
 # here. The installer then opens that page (one-click install, auto-updates)
 # instead of the drag-the-zip flow, and tells the app the store copy's ID.
-$StoreUrl = ''
+$StoreUrl = 'https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BridgeKeys = @('HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.sipphone.host',
                 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.sipphone.host')

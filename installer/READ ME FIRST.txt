@@ -1,4 +1,4 @@
-SIP PHONE  -  version 2.4.5
+SIP PHONE  -  version 2.4.6
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
@@ -100,12 +100,11 @@ THE BROWSER EXTENSION (Chrome or Edge)
 --------------------------------------
   Two ways to get it:
 
-  From the Chrome Web Store (when your administrator has published it):
-      Install.bat opens the store page - click "Add to Chrome" (Edge: allow
+  From the Chrome Web Store (recommended):
+      https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno
+      Install.bat opens that page - click "Add to Chrome" (Edge: allow
       extensions from other stores), then pin SIP Phone from the puzzle-piece
-      menu. It updates itself. If you install it later from the store link,
-      paste the store's extension ID (the 32 letters at the end of the link)
-      into Settings > Browser extension > "Chrome Web Store extension ID".
+      menu. It updates itself and connects to the app with no further setup.
 
   From this folder (no store):
       Install.bat saves "SIP Phone Browser Extension.zip" to Downloads and

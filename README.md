@@ -15,7 +15,7 @@ python3 -m unittest tests.test_flows -v      # 13 tests, ~6 s, no network needed
 ## Get started (for people who just want to use it)
 
 **Team view only (no install):** add the **SIP Phone** extension from the
-Chrome Web Store → click its icon → *Just show my team* → enter your Nextiva
+[Chrome Web Store](https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno) → click its icon → *Just show my team* → enter your Nextiva
 user login. Presence streams straight into the browser's side panel. Nothing
 else to install.
 
@@ -36,7 +36,7 @@ else to install.
 
 Then start it from **SIP Phone** in the Start menu (right-click → *Pin to
 Start*). The browser extension connects to the running app by itself — install
-it from the Chrome Web Store (or `Install.bat` sets it up) and the side panel
+it from the [Chrome Web Store](https://chromewebstore.google.com/detail/kghndilnhefammdeabhnjlphlmeeomno) (or `Install.bat` sets it up) and the side panel
 shows the phone instead of just the team board.
 
 Full details, including the Team view logins and what every setting means, are

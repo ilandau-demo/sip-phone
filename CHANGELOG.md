@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.6 — 2026-11-08
+- The Chrome Web Store listing's ID (`kghndilnhefammdeabhnjlphlmeeomno`) is
+  built into the bridge allow-list, and `Install.bat` now opens the store page
+  (`$StoreUrl` set). Store installs connect to the app with no setup, even
+  before the store copy updates to 2.4.5+. Extension files unchanged since
+  2.4.5 — no new store upload needed.
+
 ## 2.4.5 — 2026-11-08
 - Browser extension installed from the Chrome Web Store now connects to the
   desktop app by itself: when Chrome refuses the bridge because the copy's ID
