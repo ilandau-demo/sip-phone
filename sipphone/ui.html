@@ -142,6 +142,11 @@
   .chips button:hover { border-color: var(--ink-3); color: var(--ink); }
   .chips button.on { background: var(--line); border-color: var(--line); color: #fff; }
   .chips button.on .n { color: rgba(255,255,255,.85); }
+  .chips button.grp { border-style: dashed; }
+  .chips button.grp.on { border-style: solid; }
+  .s-grp-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .s-grp-row input { flex: 1 1 160px; min-width: 0; }
+  #s-grp-pick { width: 100%; }
   .chips button .n { margin-left: 4px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .chips select { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink-2); max-width: 160px; }
   .chips .reset { border: 0; color: var(--line); background: none; }
@@ -455,7 +460,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <h1>Nextiva Companion App <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
+    <h1 title="Nextiva Companion App">Nextiva Companion <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
     <div class="reg" id="reg"><span class="dot"></span><span id="regtext">Connecting…</span></div>
     <button class="ghost" id="reregister" title="Register again now">Re-register</button>
     <button class="ghost gear" id="btn-settings" title="Settings: your SIP account, Team view, voice and audio" aria-label="Settings" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span class="gl">Settings</span></button>
@@ -712,6 +717,14 @@
           <input type="hidden" data-k="admin.show_services">
           <div id="s-svc" class="s-svc"></div>
           <small>Only people get presence. Ticked service types appear in their own section of the Team tab as click-to-call entries; unticked ones are hidden.</small></div>
+        <div class="s-field" id="s-grp"><span>Group display names</span>
+          <select id="s-grp-pick" aria-label="Group to rename"><option value="">Choose a group…</option></select>
+          <div class="s-grp-row" id="s-grp-edit" hidden>
+            <input id="s-grp-name" spellcheck="false" maxlength="80" placeholder="Display name" aria-label="Display name">
+            <button type="button" id="s-grp-save">Save name</button>
+            <button type="button" class="link" id="s-grp-reset">Use directory name</button>
+          </div>
+          <small id="s-grp-msg" role="status">Groups the directory found (hunt groups, call centers, auto attendants…). Pick one and give it the name you want to see instead of its ID. Saved right away; applies to the Team tab, boards, speed dials and transfer.</small></div>
         <label class="s-field"><span>Hide from the list</span><input data-k="admin.hide_user" spellcheck="false" placeholder="Your own userId, extension or number"></label>
         <div class="s-test"><button type="button" id="s-test">Test connection</button><span id="s-test-msg" role="status"></span></div>
         <details><summary>More Team options</summary>
@@ -1028,9 +1041,9 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
                   ringing:['ringing','Ringing'], dialing:['dialing','Calling out'], dnd:['dnd','Do Not Disturb'],
                   offline:['offline','Offline'], error:['error','Unavailable'], unknown:['unknown','Unknown']};
   const FILTERS = [['available','Available'], ['ringing','Ringing'], ['on-call','On a call'], ['on-hold','On hold'], ['dnd','DND'], ['offline','Offline'], ['unknown','Unknown']];
-  let teamQ = '', teamStatuses = new Set(), teamDept = '';
-  try { const sv = JSON.parse(sessionStorage.getItem('sipphone.teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; } catch (e) {}
-  const saveFilter = () => { try { sessionStorage.setItem('sipphone.teamfilter', JSON.stringify({q: teamQ, statuses: [...teamStatuses], dept: teamDept})); } catch (e) {} };
+  let teamQ = '', teamStatuses = new Set(), teamDept = '', teamKinds = new Set();
+  try { const sv = JSON.parse(sessionStorage.getItem('sipphone.teamfilter') || '{}'); teamQ = sv.q || ''; teamStatuses = new Set(sv.statuses || []); teamDept = sv.dept || ''; teamKinds = new Set(sv.kinds || []); } catch (e) {}
+  const saveFilter = () => { try { sessionStorage.setItem('sipphone.teamfilter', JSON.stringify({q: teamQ, statuses: [...teamStatuses], dept: teamDept, kinds: [...teamKinds]})); } catch (e) {} };
   const norm = x => (x || '').toString().toLowerCase();
   const personMatches = (u, q) => { if (!q) return true; const hay = [u.name, u.first, u.last, u.extension, u.number, u.department, u.title, u.email, u.location, u.user_id].map(norm).join(' '); return q.split(/\s+/).filter(Boolean).every(t => hay.includes(t)); };
   const hl = (el, text, q) => { el.textContent = ''; const terms = q.split(/\s+/).filter(Boolean); if (!terms.length) { el.textContent = text; return; }
@@ -1152,7 +1165,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       return row;
   };
   let teamSig = '';
-  const renderChips = (users) => {
+  const renderChips = (users, services) => {
     const box = $('team-chips'); box.innerHTML = '';
     const counts = {}; for (const u of users) counts[u.status] = (counts[u.status] || 0) + 1;
     for (const [k, label] of FILTERS) {
@@ -1163,6 +1176,18 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       b.onclick = () => { if (teamStatuses.has(k)) teamStatuses.delete(k); else teamStatuses.add(k); saveFilter(); teamSig = ''; loadTeam(); };
       box.appendChild(b);
     }
+    // groups (hunt groups, call centers, ...): one chip per kind; picking one shows those groups
+    const kinds = new Map();
+    for (const sv of (services || [])) { const k = sv.kind || 'other'; const e = kinds.get(k) || {label: sv.kind_label || 'Groups', n: 0}; e.n++; kinds.set(k, e); }
+    for (const [k, e] of kinds) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'grp' + (teamKinds.has(k) ? ' on' : ''); b.textContent = e.label;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = e.n; b.appendChild(n);
+      b.setAttribute('aria-pressed', teamKinds.has(k) ? 'true' : 'false');
+      b.title = 'Show only these groups (combine with a status to add people)';
+      b.onclick = () => { if (teamKinds.has(k)) teamKinds.delete(k); else teamKinds.add(k); saveFilter(); teamSig = ''; loadTeam(); };
+      box.appendChild(b);
+    }
+    for (const k of [...teamKinds]) if (!kinds.has(k)) teamKinds.delete(k);
     const depts = [...new Set(users.map(u => (u.department || '').trim()).filter(Boolean))].sort();
     if (depts.length > 1) {
       const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Department');
@@ -1172,9 +1197,9 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       sel.onchange = () => { teamDept = sel.value; saveFilter(); teamSig = ''; loadTeam(); };
       box.appendChild(sel);
     }
-    if (teamStatuses.size || teamDept || teamQ) {
+    if (teamStatuses.size || teamDept || teamQ || teamKinds.size) {
       const r = document.createElement('button'); r.type = 'button'; r.className = 'reset'; r.textContent = 'Reset';
-      r.onclick = () => { teamStatuses.clear(); teamDept = ''; teamQ = ''; $('team-q').value = ''; saveFilter(); teamSig = ''; loadTeam(); };
+      r.onclick = () => { teamStatuses.clear(); teamKinds.clear(); teamDept = ''; teamQ = ''; $('team-q').value = ''; saveFilter(); teamSig = ''; loadTeam(); };
       box.appendChild(r);
     }
   };
@@ -1202,11 +1227,13 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       return;
     }
     $('team-tools').hidden = $('team').hidden;
-    renderChips(j.users);
-    const shown = j.users.filter(u => personMatches(u, teamQ) && (!teamStatuses.size || teamStatuses.has(u.status)) && (!teamDept || (u.department || '').trim() === teamDept));
+    renderChips(j.users, j.services);
+    // a group chip alone shows just those groups; with a status chip, people too
+    const peopleOff = teamKinds.size && !teamStatuses.size;
+    const shown = peopleOff ? [] : j.users.filter(u => personMatches(u, teamQ) && (!teamStatuses.size || teamStatuses.has(u.status)) && (!teamDept || (u.department || '').trim() === teamDept));
     // re-render only when something visible changed (large directories, 1 s polls)
-    const sig = JSON.stringify([teamQ, [...teamStatuses], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, connected(), Object.keys(watchRules),
-      shown.map(u => [u.user_id, u.status, u.with_number, u.with_name, u.stale, u.monitor]), (j.services || []).map(x => x.user_id)]);
+    const sig = JSON.stringify([teamQ, [...teamStatuses], [...teamKinds], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, connected(), Object.keys(watchRules),
+      shown.map(u => [u.user_id, u.status, u.with_number, u.with_name, u.stale, u.monitor]), (j.services || []).map(x => [x.user_id, x.name])]);
     if (sig === teamSig) {
       box.querySelectorAll('.dur2[data-since]').forEach(d => { d.textContent = relTime(+d.dataset.since); });
       const f = box.querySelector('.team-foot'); if (f && !j.last_error && j.ready) f.textContent = footText(j);
@@ -1214,7 +1241,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     }
     teamSig = sig;
     box.innerHTML = '';
-    if (!shown.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = j.users.length ? 'No one matches — clear the search or filters.' : 'The directory is empty.'; box.appendChild(e); }
+    if (!shown.length && !peopleOff) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = j.users.length ? 'No one matches — clear the search or filters.' : 'The directory is empty.'; box.appendChild(e); }
     // group by department (falls back to a flat list if no departments are set)
     const ACTIVE = ['on-call','on-hold','ringing','dialing'];
     const anyDept = shown.some(u => (u.department || '').trim()) && !teamQ;
@@ -1243,7 +1270,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       for (const u of shown) box.appendChild(buildRow(u));
     }
     // services (hunt groups, queues, ...): speed dials, no presence
-    const svcs = (j.services || []).filter(sv => personMatches(sv, teamQ) && !teamStatuses.size);
+    const svcs = (j.services || []).filter(sv => personMatches(sv, teamQ) && (teamKinds.size ? teamKinds.has(sv.kind || 'other') : !teamStatuses.size) && !teamDept);
+    if (peopleOff && !svcs.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No groups match — clear the search or filters.'; box.appendChild(e); }
     if (svcs.length) {
       let lastKind = null;
       for (const sv of svcs) {
@@ -1263,6 +1291,48 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     foot.title = j.last_error ? '' : 'Open Settings → Team view → Check for connection details';
     box.appendChild(foot);
   };
+  // ---- group display names (Settings → Team view) ----
+  let grpList = [];
+  const grpLabel = g => (g.renamed ? `${g.name} (${g.original_name})` : g.name) + (g.extension || g.number ? ` · x${g.extension || g.number}` : '') + (g.shown ? '' : ' · not listed');
+  const fillGroups = keep => {
+    const pick = $('s-grp-pick'); pick.innerHTML = '';
+    const o = document.createElement('option'); o.value = ''; o.textContent = grpList.length ? 'Choose a group…' : 'No groups found yet'; pick.appendChild(o);
+    let lastKind = null, og = null;
+    for (const g of grpList) {
+      if (g.kind_label !== lastKind) { lastKind = g.kind_label; og = document.createElement('optgroup'); og.label = g.kind_label || 'Groups'; pick.appendChild(og); }
+      const op = document.createElement('option'); op.value = g.user_id; op.textContent = grpLabel(g); og.appendChild(op);
+    }
+    pick.disabled = !grpList.length;
+    pick.value = keep && grpList.some(g => g.user_id === keep) ? keep : '';
+    showGroup();
+  };
+  const showGroup = () => {
+    const g = grpList.find(x => x.user_id === $('s-grp-pick').value);
+    $('s-grp-edit').hidden = !g;
+    if (!g) return;
+    $('s-grp-name').value = g.renamed ? g.name : '';
+    $('s-grp-name').placeholder = g.original_name || g.user_id;
+    $('s-grp-reset').hidden = !g.renamed;
+    $('s-grp-msg').textContent = `Directory name: ${g.original_name || '—'} · ID ${g.user_id}`;
+  };
+  const loadGroupNames = async () => {
+    try { const r = await (await fetch('/api/presence/groups', {cache: 'no-store'})).json(); grpList = r.groups || []; } catch (e) { grpList = []; }
+    fillGroups($('s-grp-pick').value);
+  };
+  const saveGroupName = async name => {
+    const uid = $('s-grp-pick').value; if (!uid) return;
+    try {
+      const r = await (await fetch('/api/presence/groups', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: uid, name})})).json();
+      if (r.error) { $('s-grp-msg').textContent = r.error; return; }
+      grpList = r.groups || grpList; fillGroups(uid);
+      $('s-grp-msg').textContent = name ? `Saved — shown as “${name}”.` : 'Back to the directory name.';
+      teamSig = ''; lastTeam = null; loadTeam();
+    } catch (e) { $('s-grp-msg').textContent = 'Couldn’t save — is the app running?'; }
+  };
+  $('s-grp-pick').onchange = showGroup;
+  $('s-grp-save').onclick = () => saveGroupName($('s-grp-name').value.trim());
+  $('s-grp-reset').onclick = () => saveGroupName('');
+  $('s-grp-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('s-grp-save').click(); } });
   // ---- person details + availability notifications ----
   const WATCH_EVENTS = [['available', 'becomes available'], ['after-call', 'finishes a call'], ['busy', 'goes on a call'], ['dnd', 'turns on Do Not Disturb'], ['offline', 'goes offline']];
   let pdUser = null;
@@ -1530,6 +1600,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const sp = document.createElement('span'); sp.textContent = t.label; l.append(c, sp); svcBox.appendChild(l);
     }
     sdlg.querySelectorAll('input[name="appmode"]').forEach(r => { r.checked = r.value === (v.app.mode || 'phone'); });
+    loadGroupNames();
     applyMode();
     renderUpdates();
     renderVoiceSummary();

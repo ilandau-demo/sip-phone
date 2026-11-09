@@ -727,6 +727,11 @@ def make_handler(state: UIState):
                                        on_call_only=q.get("on_call", [""])[0] in ("1", "true"),
                                        monitored_only=q.get("monitored", [""])[0] in ("1", "true"))
                 self._json({"users": search_people(people, q.get("q", [""])[0], int(q.get("limit", ["0"])[0] or 0))})
+            elif u.path == "/api/presence/groups":
+                mon = state.monitor
+                if mon is None or not hasattr(mon, "groups"):
+                    return self._json({"groups": [], "error": "Team view is off"})
+                self._json({"groups": mon.groups()})
             elif u.path == "/api/presence/watch":
                 w = state.ensure_watcher()
                 self._json({"rules": w.list_rules(), "events": __import__("sipphone.presence.notifications", fromlist=["x"]).EVENTS,
@@ -965,6 +970,15 @@ def make_handler(state: UIState):
                         return self._voice_post(u.path, body, v)
                     except (ValueError, KeyError) as e:
                         return self._json({"error": str(e)}, 400)
+                elif u.path == "/api/presence/groups":
+                    mon = state.monitor
+                    if mon is None or not hasattr(mon, "rename_group"):
+                        return self._json({"error": "Team view is off — choose a presence source first"}, 400)
+                    uid = str(body.get("user_id", "")).strip()
+                    if not uid or uid not in {g["user_id"] for g in mon.groups()}:
+                        return self._json({"error": "unknown group"}, 400)
+                    mon.rename_group(uid, str(body.get("name", "") or ""))
+                    return self._json({"ok": True, "groups": mon.groups()})
                 elif u.path == "/api/presence/watch":
                     w = state.ensure_watcher()
                     uid = str(body.get("user_id", "")).strip()

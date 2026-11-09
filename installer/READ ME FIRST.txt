@@ -68,6 +68,8 @@ WHAT TO FILL IN
       Only people get presence; tick "Also list as speed dials" to show hunt
       groups, queues, auto attendants etc. as click-to-call entries.
       Hide from the list: your own user ID or extension.
+      Group display names: pick a hunt group / call center / auto attendant
+      the directory found and type the name to show instead of its ID.
 
   How fast is it? The Team tab footer says, e.g. "live - updates in 0.4 s (p95;
   platform 0.3 s)": the time from the phone system emitting a change to it

@@ -381,3 +381,40 @@ class ClusterTests(unittest.TestCase):
         finally:
             C.socket.create_connection = real
             mock.stop()
+
+
+class GroupNameTests(unittest.TestCase):
+    """Groups found in the directory can be given display names in Settings."""
+
+    def test_rename_applies_everywhere_and_resets(self):
+        d = tempfile.mkdtemp()
+        HG = "hg_sales@nextiva.com"; CC = "cc_support@nextiva.com"
+        mock = MockXsi(TEAM, directory=TEAM + [(HG, "hg_sales", "Hunt Group", "1100"),
+                                               (CC, "cc_support", "Call Center", "1200")])
+        mon = PresenceManager(user_creds(mock), cache_path=os.path.join(d, "directory-cache.json"),
+                              show_services=["hunt_group"])
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+            groups = {g["user_id"]: g for g in mon.groups()}
+            self.assertIn(HG, groups); self.assertIn(CC, groups)        # every group found, listed or not
+            self.assertTrue(groups[HG]["shown"]); self.assertFalse(groups[CC]["shown"])
+            before = [s["name"] for s in mon.snapshot()["services"]]
+            fired = []
+            mon.on_update(lambda: fired.append(1))
+            mon.rename_group(HG, "  Sales   line ")
+            self.assertTrue(fired)                                       # the push stream is told
+            svc = mon.snapshot()["services"][0]
+            self.assertEqual(svc["name"], "Sales line")
+            self.assertEqual(svc["original_name"], before[0])
+            self.assertTrue(svc["renamed"])
+            self.assertTrue(os.path.exists(os.path.join(d, "group-names.json")))
+            # a fresh engine (restart) reads the saved name
+            from sipphone.presence.group_names import GroupNames
+            self.assertEqual(GroupNames(os.path.join(d, "group-names.json")).get(HG), "Sales line")
+            mon.rename_group(HG, "")
+            self.assertEqual(mon.snapshot()["services"][0]["name"], before[0])
+            self.assertNotIn("renamed", mon.snapshot()["services"][0])
+        finally:
+            mon.stop(); mock.stop()
+            shutil.rmtree(d, ignore_errors=True)

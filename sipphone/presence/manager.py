@@ -12,6 +12,7 @@ from Available. Everything else arrives as events.
 from __future__ import annotations
 
 import logging
+import os
 import random
 import re
 import threading
@@ -24,6 +25,7 @@ from .connection import EXPIRES, EventsClient
 from .directory import Directory
 from .event_processor import EventProcessor
 from .metrics import LatencyMetrics
+from .group_names import FILE_NAME as GROUP_NAMES_FILE, GroupNames
 from .models import (BUSY, MONITOR_ERROR, MONITOR_OK, MONITOR_PENDING, MONITOR_REFUSED, STATE_LABELS, MonitoredUser,
                      Target, person_dict, sort_people, status_of)
 from .subscriptions import SubscriptionManager
@@ -92,6 +94,7 @@ class PresenceManager:
         self._prev_status: Dict[str, str] = {}
         self.listeners: List[ChangeListener] = []
         self.update_listeners: List[UpdateListener] = []
+        self.group_names = GroupNames(os.path.join(os.path.dirname(cache_path), GROUP_NAMES_FILE) if cache_path else "")
         self.metrics = LatencyMetrics()
         self.channels_wanted = max(0, min(MAX_CHANNELS, int(channels or 0)))   # 0 = automatic
         self.channels_open = 0
@@ -116,6 +119,18 @@ class PresenceManager:
 
     def on_change(self, fn: ChangeListener) -> None:
         self.listeners.append(fn)
+
+    def groups(self) -> List[dict]:
+        """Every group the directory found (shown or not), with display names."""
+        with self._lock:
+            shown = {x.user_id for x in self.directory.services}
+            found = [dict(x.to_dict(), shown=x.user_id in shown) for x in self.directory.entries if getattr(x, "kind", "")]
+        return self.group_names.apply(found)
+
+    def rename_group(self, user_id: str, name: str) -> Dict[str, str]:
+        names = self.group_names.set(user_id, name)
+        self._notify_update()
+        return names
 
     def on_update(self, fn: UpdateListener) -> None:
         """Called (from the engine's threads) whenever anything may have changed:
@@ -489,6 +504,7 @@ class PresenceManager:
             last = max(self.processor.last_event, self.last_heartbeat)
         sort_people(out)
         active = sum(1 for u in out if u["status"] in BUSY)
+        self.group_names.apply(services)
         return {"users": out, "services": services, "ready": ready, "last_poll": last, "last_error": err, "active": active,
                 "total": len(out), "source": "events", "login": self.kind, "connected": connected, "stale": stale,
                 "list_source": self.list_source, "refused": refused, "ack_error": self.ack_error,
