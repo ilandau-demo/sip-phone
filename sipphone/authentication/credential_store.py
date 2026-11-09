@@ -35,30 +35,46 @@ def _dpapi(data: bytes, encrypt: bool) -> bytes:
     class DATA_BLOB(ctypes.Structure):
         _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
+    keep = []                                      # buffers must outlive the call
+
     def blob(b: bytes) -> DATA_BLOB:
         buf = ctypes.create_string_buffer(b, len(b))
+        keep.append(buf)
         return DATA_BLOB(len(b), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
 
-    crypt32, kernel32 = ctypes.windll.crypt32, ctypes.windll.kernel32
+    crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     inp, ent, out = blob(data), blob(_ENTROPY), DATA_BLOB()
     fn = crypt32.CryptProtectData if encrypt else crypt32.CryptUnprotectData
+    fn.argtypes = [ctypes.POINTER(DATA_BLOB), wintypes.LPCWSTR, ctypes.POINTER(DATA_BLOB), ctypes.c_void_p,
+                   ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(DATA_BLOB)]
+    fn.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
     CRYPTPROTECT_UI_FORBIDDEN = 0x01
     if not fn(ctypes.byref(inp), None, ctypes.byref(ent), None, None, CRYPTPROTECT_UI_FORBIDDEN, ctypes.byref(out)):
-        raise OSError(f"DPAPI {'protect' if encrypt else 'unprotect'} failed ({ctypes.GetLastError()})")
+        raise OSError(f"DPAPI {'protect' if encrypt else 'unprotect'} failed ({ctypes.get_last_error()})")
     try:
         return ctypes.string_at(out.pbData, out.cbData)
     finally:
         kernel32.LocalFree(out.pbData)
 
 
+last_problem = ""          # set when a stored secret could not be read; shown in Settings
+
+
 def protect(value: str) -> str:
-    """Return the stored form of a secret (idempotent)."""
+    """Return the stored form of a secret (idempotent). The DPAPI form is only
+    used if it reads back correctly on this machine right now; otherwise the
+    secret is stored obfuscated rather than risk an unreadable password."""
     if not value or is_protected(value):
         return value
     raw = value.encode("utf-8")
     if sys.platform == "win32" and os.environ.get("SIPPHONE_NO_DPAPI") != "1":
         try:
-            return "dpapi:" + base64.b64encode(_dpapi(raw, True)).decode("ascii")
+            stored = "dpapi:" + base64.b64encode(_dpapi(raw, True)).decode("ascii")
+            if reveal(stored) == value:
+                return stored
+            log.warning("DPAPI round trip did not match; storing obfuscated instead")
         except Exception as e:                       # pragma: no cover - only on odd Windows setups
             log.warning("DPAPI unavailable (%s); storing obfuscated", e)
     return "b64:" + base64.b64encode(raw).decode("ascii")
@@ -74,15 +90,20 @@ def reveal(value: str) -> str:
     except Exception:
         log.warning("stored secret is not valid base64; treating as empty")
         return ""
+    global last_problem
     if kind == "b64":
         return raw.decode("utf-8", errors="replace")
     if sys.platform != "win32":
-        log.warning("a DPAPI-protected secret can only be read on the Windows account that saved it")
+        last_problem = "a Windows-protected password can only be read on the Windows account that saved it"
+        log.warning(last_problem)
         return ""
     try:
-        return _dpapi(raw, False).decode("utf-8", errors="replace")
+        out = _dpapi(raw, False).decode("utf-8", errors="replace")
+        last_problem = ""
+        return out
     except Exception as e:
-        log.warning("could not read the stored password (%s); enter it again in Settings", e)
+        last_problem = f"the stored password could not be read ({e}); enter it again in Settings"
+        log.warning(last_problem)
         return ""
 
 

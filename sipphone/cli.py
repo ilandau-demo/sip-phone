@@ -304,6 +304,56 @@ def make_monitor(admin_opts: dict, phone=None):
     return monitor
 
 
+def diagnose(path: str) -> int:
+    """Plain-words health check for 'not registered': stored passwords, name
+    resolution, and one REGISTER attempt with the server's answer."""
+    import socket
+    from . import config_store
+    from .authentication import credential_store
+    print(f"config: {path}")
+    cp = config_store.read(path)
+    acct = cp["account"] if cp.has_section("account") else {}
+    raw_pw = ""
+    try:
+        import configparser
+        rawcp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#")); rawcp.read(path, encoding="utf-8")
+        raw_pw = rawcp.get("account", "password", fallback="")
+    except Exception:
+        pass
+    kind = "Windows-protected (DPAPI)" if raw_pw.startswith("dpapi:") else "obfuscated" if raw_pw.startswith("b64:") else "plain" if raw_pw else "EMPTY"
+    pw = acct.get("password", "")
+    print(f"SIP password on disk: {kind}; readable: {'yes' if pw else 'NO'}" + (f" — {credential_store.last_problem}" if credential_store.last_problem else ""))
+    print(f"SIP username: {acct.get('username', '')!r}  auth name: {acct.get('auth_username', '') or '(same)'}  domain: {acct.get('domain', '')!r}")
+    proxy = (acct.get("proxy") or acct.get("domain") or "").strip()
+    port = acct.get("proxy_port", "5060")
+    try:
+        ip = socket.gethostbyname(proxy)
+        print(f"server: {proxy}:{port} -> {ip}")
+    except Exception as e:
+        print(f"server: {proxy}:{port} -> DNS FAILED ({e})")
+        return 1
+    if not pw:
+        print("RESULT: no usable password — open Settings > Phone line, enter the SIP password again, Save.")
+        return 1
+    loaded = load_config(path); cfg = loaded[0]
+    from .audio import open_audio
+    phone = SIPPhone(cfg, audio=open_audio(kind="null"))
+    detail = {"text": ""}
+    phone.on_registration = lambda ok_, d_: detail.update(text=d_)
+    phone.start()
+    ok = phone.register(wait=True, timeout=8)
+    print(f"REGISTER: {'OK — registered' if ok else 'FAILED — ' + (detail['text'] or 'no answer (timeout)')}")
+    phone.stop()
+    if not ok:
+        d = detail["text"].lower()
+        if "auth" in d or "401" in d or "403" in d:
+            print("Hint: the server rejected the credentials. Check SIP username vs. Authentication Name (they differ on most "
+                  "BroadWorks devices), and that the password is the SIP/device password, not the portal login.")
+        elif "timeout" in d or not d:
+            print("Hint: no reply from the server — firewall, VPN, router SIP ALG, or wrong proxy port.")
+    return 0 if ok else 1
+
+
 def load_config(path: str) -> tuple[Config, dict]:
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     if not cp.read(path):
@@ -432,6 +482,7 @@ def main(argv=None) -> int:
     ap.add_argument("--unregister-bridge", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--prepare-update", action="store_true", help=argparse.SUPPRESS)   # installer
     ap.add_argument("--finish-update", action="store_true", help=argparse.SUPPRESS)    # installer
+    ap.add_argument("--diagnose", action="store_true", help="check the stored passwords, DNS and a REGISTER round trip, then exit")
     ap.add_argument("--check-admin", action="store_true",
                     help="test the [admin] Xsi connection and print the exact result")
     args = ap.parse_args(argv)
@@ -443,6 +494,8 @@ def main(argv=None) -> int:
     if args.devices:
         print(audio_mod.list_devices())
         return 0
+    if args.diagnose:
+        return diagnose(args.config)
     if args.check_admin:
         args.config = find_config(args.config)
         _, _, admin_opts = load_config(args.config)

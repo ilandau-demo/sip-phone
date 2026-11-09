@@ -193,6 +193,10 @@ class SettingsManager:
         dom = self._raw(cp, "account", "domain").strip()
         return not user or not dom or user == TEMPLATE_USERNAME or not pw or pw == TEMPLATE_PASSWORD
 
+    def credential_problem(self) -> str:
+        from .authentication import credential_store
+        return credential_store.last_problem
+
     def needs_setup(self) -> bool:
         """True until the chosen mode has what it needs to work."""
         cp = self._cp()

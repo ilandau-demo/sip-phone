@@ -145,6 +145,16 @@ class UIState:
         sec = int(sec)
         return f"{sec // 60}:{sec % 60:02d}"
 
+    def _warnings(self) -> list:
+        out = list(self.warnings)
+        try:
+            from .authentication import credential_store
+            if credential_store.last_problem:
+                out.append("Password: " + credential_store.last_problem)
+        except Exception:
+            pass
+        return out
+
     def add(self, kind: str, text: str) -> None:
         with self.lock:
             self.events.append({"id": self.next_id, "kind": kind, "text": text, "t": time.time()})
@@ -219,7 +229,7 @@ class UIState:
                 "has_settings": self.settings is not None,
                 "needs_setup": bool(self.settings and self.settings.setup_needed),
                 "restart_pending": bool(self.settings and self.settings.pending),
-                "warnings": list(self.warnings),
+                "warnings": self._warnings(),
                 "display_name": p.cfg.display_name, "pickup_code": self.pickup_code, "reg_detail": self.reg_detail,
                 "account": f"{p.cfg.username}@{p.cfg.domain}",
                 "expires_in": max(0, int(p.register_expiry - time.time())) if p.register_expiry else 0,
