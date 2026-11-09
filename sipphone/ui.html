@@ -720,8 +720,8 @@
           <div data-mode="events admin">
             <label class="s-field"><span>Only watch these users</span><input data-k="admin.users" spellcheck="false" placeholder="Comma-separated user IDs; blank = the whole directory"></label>
           </div>
-          <div data-mode="admin">
-            <label class="s-field"><span>Refresh (sec)</span><input data-k="admin.poll_seconds" inputmode="decimal"></label>
+          <div data-mode="events admin">
+            <label class="s-field"><span>Event channels</span><input data-k="presence.channels" inputmode="numeric" placeholder="0 = automatic"><small>0 = automatic (1 for up to 50 people, 2 up to 150, 4 above). Each channel clears its own acknowledgements, so more channels move more events per second on busy teams. Max 8.</small></label>
           </div>
         </details>
       </div>
@@ -789,6 +789,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const $ = id => document.getElementById(id);
   const number = $('number'), thread = $('thread'), text = $('text');
   let lastEvent = 0, call = null, tts = null, registered = false, presenceMode = false;
+  let streamLive = false;                                // /api/stream connected (else we poll)
 
   const api = async (path, body) => {
     const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
@@ -1036,8 +1037,25 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'ig');
     for (const part of text.split(re)) { if (!part) continue; const m = part.match(re); const node = m && m[0] === part ? document.createElement('mark') : document.createTextNode(''); if (node.nodeType === 1) { node.textContent = part; el.appendChild(node); } else el.appendChild(document.createTextNode(part)); } };
   let watchRules = {};
-  let lastTeam = null;                                   // latest /api/monitor snapshot
-  const fetchTeam = async () => { try { lastTeam = await (await fetch('/api/monitor')).json(); } catch (e) {} return lastTeam; };
+  let lastTeam = null;                                   // latest team snapshot (pushed, or polled as fallback)
+  const fetchTeam = async () => { if (streamLive && lastTeam) return lastTeam; try { lastTeam = await (await fetch('/api/monitor')).json(); } catch (e) {} return lastTeam; };
+  // the push stream sends only the rows that changed; merge them and keep the server's order
+  const ORDER = {ringing: 0, 'on-call': 1, 'on-hold': 2, dialing: 3, dnd: 4, available: 5, offline: 6, unknown: 7};
+  const sortPeople = us => us.sort((a, b) => ((ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9)) || a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  let renderTimes = [];
+  const applyTeamPush = m => {
+    if (!m || m.enabled === false) { lastTeam = {enabled: false}; return; }
+    const meta = Object.assign({}, m.meta, {enabled: true});
+    if (m.full || !lastTeam || !lastTeam.users) { meta.users = m.users.slice(); }
+    else {
+      const byId = new Map(lastTeam.users.map(u => [u.user_id, u]));
+      for (const u of m.users) byId.set(u.user_id, u);
+      for (const id of (m.removed || [])) byId.delete(id);
+      meta.users = [...byId.values()];
+    }
+    sortPeople(meta.users);
+    lastTeam = meta;
+  };
   const buildRow = (u) => {
       const [cls, label] = STATUS[u.status] || ['', u.status];
       const row = document.createElement('div'); row.className = 'teammate ' + cls;
@@ -1165,6 +1183,17 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   $('team-qx').addEventListener('click', () => { $('team-q').value = ''; teamQ = ''; $('team-qx').hidden = true; saveFilter(); teamSig = ''; if (lastTeam) renderTeam(lastTeam); $('team-q').focus(); });
   $('team-q').addEventListener('keydown', e => { if (e.key === 'Escape') { $('team-qx').click(); } });
   const loadTeam = async () => { const j = await fetchTeam(); if (j) renderTeam(j); };
+  const footText = j => j.last_error ? j.last_error
+      : !j.ready ? (j.source === 'events' ? 'Opening the event channel…' : 'Connecting to the server…')
+      : j.source === 'events' ? (j.connected ? `${j.active} of ${j.total} on a call · live${streamLive ? '' : ' (polling)'}${j.stale ? ' (stale)' : ''}${j.refused ? ' · ' + j.refused + ' not monitored' : ''}` + (j.ack_error ? ' · acknowledgements failing — updates will lag' : '') + latencyNote(j) : 'Reconnecting to the event channel… showing last known state')
+      : `${j.active} of ${j.total} on a call · updated ${relTime(j.last_poll)} ago`;
+  const latencyNote = j => {
+    const l = j.latency; if (!l) return '';
+    const ours = l.visible_p95, e2e = l.end_to_end_p95;
+    if (!l.engine || !l.engine.recent) return '';
+    const fmt = x => x < 1 ? `${Math.round(x * 1000)} ms` : `${x.toFixed(1)} s`;
+    return e2e != null && l.platform.recent >= 3 ? ` · updates in ${fmt(e2e)} (p95; platform ${fmt(l.platform.p95)})` : ` · updates in ${fmt(ours)} (p95)`;
+  };
   const renderTeam = (j) => {
     const box = $('team');
     if (!j.enabled) {
@@ -1178,7 +1207,11 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     // re-render only when something visible changed (large directories, 1 s polls)
     const sig = JSON.stringify([teamQ, [...teamStatuses], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, connected(), Object.keys(watchRules),
       shown.map(u => [u.user_id, u.status, u.with_number, u.with_name, u.stale, u.monitor]), (j.services || []).map(x => x.user_id)]);
-    if (sig === teamSig) { box.querySelectorAll('.dur2[data-since]').forEach(d => { d.textContent = relTime(+d.dataset.since); }); return; }
+    if (sig === teamSig) {
+      box.querySelectorAll('.dur2[data-since]').forEach(d => { d.textContent = relTime(+d.dataset.since); });
+      const f = box.querySelector('.team-foot'); if (f && !j.last_error && j.ready) f.textContent = footText(j);
+      return;
+    }
     teamSig = sig;
     box.innerHTML = '';
     if (!shown.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = j.users.length ? 'No one matches — clear the search or filters.' : 'The directory is empty.'; box.appendChild(e); }
@@ -1226,10 +1259,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     }
     const foot = document.createElement('div');
     foot.className = 'team-foot' + (j.last_error ? ' err' : '');
-    foot.textContent = j.last_error ? j.last_error
-      : !j.ready ? (j.source === 'events' ? 'Opening the event channel…' : 'Connecting to the server…')
-      : j.source === 'events' ? (j.connected ? `${j.active} of ${j.total} on a call · live${j.stale ? ' (stale)' : ''}${j.refused ? ' · ' + j.refused + ' not monitored' : ''}` + (j.ack_error ? ' · acknowledgements failing — updates will lag' : '') : 'Reconnecting to the event channel… showing last known state')
-      : `${j.active} of ${j.total} on a call · updated ${relTime(j.last_poll)} ago`;
+    foot.textContent = footText(j);
     foot.title = j.last_error ? '' : 'Open Settings → Team view → Check for connection details';
     box.appendChild(foot);
   };
@@ -1370,8 +1400,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     if (which === 'team') loadTeam();
     if (which.startsWith('board:')) loadBoard();
     if (teamTimer) { clearInterval(teamTimer); teamTimer = null; }
-    if (which === 'team') teamTimer = setInterval(loadTeam, 1000);
-    if (which.startsWith('board:')) teamTimer = setInterval(loadBoard, 1000);
+    if (!streamLive && which === 'team') teamTimer = setInterval(loadTeam, 1000);
+    if (!streamLive && which.startsWith('board:')) teamTimer = setInterval(loadBoard, 1000);
     try { localStorage.setItem('sipphone.tab', which); } catch (e) {}
   };
   $('tab-contacts').onclick = () => showTab('contacts');
@@ -1988,12 +2018,42 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     } else if (!call || call.state !== 'incoming') document.title = 'SIP Phone';
   };
 
+  // ---- live updates: pushed over /api/stream; polling only as the fallback ----
+  let pollTimer = null;
   const poll = async () => {
+    pollTimer = null;
+    if (streamLive) return;
     try { render(await (await fetch('/api/state?since=' + lastEvent)).json()); }
     catch (e) { $('regtext').textContent = document.title === 'SIP Phone stopped' ? 'Phone stopped — launch SIP Phone again to reconnect' : 'SIP Phone is not reachable'; $('reg').className = 'reg off'; }
-    setTimeout(poll, call && call.state === 'connected' ? 500 : 800);
+    if (!streamLive) pollTimer = setTimeout(poll, call && call.state === 'connected' ? 500 : 800);
   };
-  poll();
+  const startPolling = () => { if (!pollTimer) poll(); if (!teamTimer && curTab === 'team') teamTimer = setInterval(loadTeam, 1000); if (!teamTimer && curTab.startsWith('board:')) teamTimer = setInterval(loadBoard, 1000); };
+  let es = null, esDrops = [], esRetry = 1000;
+  const openStream = () => {
+    if (!window.EventSource) { startPolling(); return; }
+    try { es = new EventSource('/api/stream?since=' + lastEvent); } catch (e) { startPolling(); return; }
+    es.addEventListener('state', ev => {
+      if (!streamLive) { streamLive = true; esRetry = 1000; if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } if (teamTimer) { clearInterval(teamTimer); teamTimer = null; } }
+      try { render(JSON.parse(ev.data)); } catch (e) {}
+    });
+    es.addEventListener('team', ev => {
+      let m; try { m = JSON.parse(ev.data); applyTeamPush(m); } catch (e) { return; }
+      if (curTab === 'team') renderTeam(lastTeam); else if (curTab.startsWith('board:')) renderBoard();
+      if (m && m.t && !m.full && m.users && m.users.length && (curTab === 'team' || curTab.startsWith('board:'))) renderTimes.push(Math.max(0, Date.now() / 1000 - m.t));
+    });
+    es.onerror = () => {
+      const wasLive = streamLive; streamLive = false;
+      try { es.close(); } catch (e) {} es = null;
+      const now = Date.now(); esDrops = esDrops.filter(t => now - t < 60000); esDrops.push(now);
+      startPolling();                                  // keep working while the stream is down
+      if (wasLive && lastTeam && curTab === 'team') { teamSig = ''; renderTeam(lastTeam); }
+      const wait = esDrops.length >= 2 ? 10000 : esRetry; esRetry = Math.min(esRetry * 2, 10000);
+      setTimeout(openStream, wait);
+    };
+  };
+  openStream();
+  // report how long after the engine applied a change it was on screen (never leaves this machine)
+  setInterval(() => { if (renderTimes.length) { const r = renderTimes.splice(0, 200); fetch('/api/presence/metrics', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({render: r})}).catch(() => {}); } }, 30000);
 })();
 </script>
 </body>

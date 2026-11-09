@@ -50,6 +50,15 @@ class MockXsi:
         self.acks = []
         self.heartbeats = 0
         self.channels = {}                        # channelId -> queue
+        self.channel_order = []                   # ids in open order (round-robin distribution)
+        self._rr = 0
+        self.distribute = "round_robin"           # round_robin (like a BroadWorks channel set) | all
+        self.ack_gate = False                     # hold a channel's next event until the previous is acked
+        self.ack_timeout = 2.0                    # ...or until this long has passed
+        self.ack_delay = 0.0                      # simulated server-side time per ack
+        self.max_channels = 0                     # 0 = unlimited; else refuse more (HTTP 409)
+        self.waiting_ack = {}                     # channelId -> eventID awaiting ack
+        self.acked = set()
         self.closed = threading.Event()
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.srv.daemon_threads = True
@@ -62,8 +71,16 @@ class MockXsi:
         self.srv.shutdown(); self.srv.server_close()
 
     def push(self, target, kind, inner):
-        for q in list(self.channels.values()):
-            q.put(ev(target, kind, inner))
+        doc = ev(target, kind, inner)
+        if self.distribute == "all" or len(self.channels) <= 1:
+            for q in list(self.channels.values()):
+                q.put(doc)
+            return
+        ids = [c for c in self.channel_order if c in self.channels]
+        if not ids:
+            return
+        self._rr = (self._rr + 1) % len(ids)
+        self.channels[ids[self._rr]].put(doc)
 
     def set_calls(self, target, calls, kind="CallUpdatedEvent"):
         self.calls[target] = calls
@@ -75,6 +92,14 @@ class MockXsi:
 
         class H(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"           # keep-alive, like the real Xsp
+            def setup(self):
+                super().setup()
+                try:
+                    import socket as _s
+                    self.connection.setsockopt(_s.IPPROTO_TCP, _s.TCP_NODELAY, 1)   # no Nagle stalls in timing tests
+                except OSError:
+                    pass
+            protocol_version = "HTTP/1.1"           # keep-alive, like the real Xsp
             def log_message(self, *a):
                 pass
 
@@ -84,7 +109,7 @@ class MockXsi:
                 self.admin = who == f"{ADMIN}:{APW}"
                 ok = self.admin or who == f"{USER}:{PW}"
                 if not ok:
-                    self.send_response(401); self.end_headers()
+                    self.send_response(401); self.send_header("Content-Length", "0"); self.end_headers()
                 return ok
 
             def _xml(self, body, status=200):
@@ -122,8 +147,10 @@ class MockXsi:
                 if self.path.endswith("xsi-events/v2.0/channel"):
                     if "/com.broadsoft.async/" not in self.path:
                         return self._xml("<nope/>", 404)          # Nextiva-style: streaming only on the async path
+                    if mock.max_channels and len(mock.channels) >= mock.max_channels:
+                        return self._xml(f'<ErrorInfo xmlns="{XSI}"><summary>too many channels</summary></ErrorInfo>', 409)
                     cid = uuid.uuid4().hex[:8]
-                    q = queue.Queue(); mock.channels[cid] = q
+                    q = queue.Queue(); mock.channels[cid] = q; mock.channel_order.append(cid)
                     self.send_response(200); self.send_header("Content-Type", "application/xml")
                     self.send_header("Transfer-Encoding", "chunked"); self.end_headers()
                     first = f'<?xml version="1.0"?><Channel xmlns="{XSI}"><channelId>{cid}</channelId><expires>3600</expires></Channel>'.encode()
@@ -134,6 +161,14 @@ class MockXsi:
                                 doc = q.get(timeout=0.5)
                             except queue.Empty:
                                 continue
+                            if mock.ack_gate:
+                                # like the Xsp: the next event waits for the previous ack (or a timeout)
+                                prev = mock.waiting_ack.get(cid)
+                                deadline = time.time() + mock.ack_timeout
+                                while prev and prev not in mock.acked and time.time() < deadline and not mock.closed.is_set():
+                                    time.sleep(0.002)
+                                m_id = re.search(rb"<xsi:eventID>([^<]+)", doc)
+                                mock.waiting_ack[cid] = m_id.group(1).decode() if m_id else None
                             self._chunk(doc)
                     except (BrokenPipeError, ConnectionResetError):
                         pass
@@ -142,7 +177,10 @@ class MockXsi:
                 if self.path.endswith("/channel/eventresponse"):
                     if mock.ack_mode == "fail" or (mock.ack_mode == "async" and "/com.broadsoft.async/" not in self.path):
                         return self._xml("<nope/>", 404)
-                    mock.acks.append(re.search(r"<eventID>([^<]+)", body).group(1))
+                    eid = re.search(r"<eventID>([^<]+)", body).group(1)
+                    if mock.ack_delay:
+                        time.sleep(mock.ack_delay)
+                    mock.acks.append(eid); mock.acked.add(eid)
                     return self._xml("")
                 m = re.match(r"/com\.broadsoft\.xsi-events/v2\.0/user/([^/]+)$", self.path)
                 if m:

@@ -298,8 +298,9 @@ def make_monitor(admin_opts: dict, phone=None):
                            else "enter the Admin XSI login and password for the Team view")
     monitor = PresenceManager(creds, cache_path=admin_opts.get("cache_path", ""), users=admin_opts["users"],
                               hide=admin_opts["hide_user"], show_services=admin_opts.get("show_services") or [],
-                              concurrency=int(admin_opts.get("concurrency", 6) or 6),
-                              registration_sweep=bool(admin_opts.get("registration_sweep", True)))
+                              concurrency=int(admin_opts.get("concurrency", 12) or 12),
+                              registration_sweep=bool(admin_opts.get("registration_sweep", True)),
+                              channels=int(admin_opts.get("channels", 0) or 0))
     monitor.start()
     return monitor
 
@@ -424,7 +425,8 @@ def load_config(path: str) -> tuple[Config, dict]:
         "show_services": ([k.strip().lower() for k in adm["show_services"].split(",") if k.strip()]
                           if adm.get("show_services", None) is not None else None),
         "poll_seconds": float(adm.get("poll_seconds", 5) or 5),
-        "concurrency": int(adm.get("concurrency", 6) or 6),
+        "concurrency": int(adm.get("concurrency", 12) or 12),
+        "channels": int(pres.get("channels", adm.get("channels", 0)) or 0),      # 0 = automatic (1–4 by directory size)
         "registration_sweep": (adm.get("registration_sweep", "true").strip().lower() not in ("false", "no", "0")),
         "cache_path": os.path.join(os.path.dirname(os.path.abspath(path)), "directory-cache.json"),
         "verify_tls": (adm.get("verify_tls", "true").strip().lower() not in ("false", "no", "0")),

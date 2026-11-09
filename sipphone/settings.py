@@ -44,6 +44,7 @@ FIELDS = [
     ("presence", "mode", "admin", "str"),
     ("presence", "xsi_user", "admin", "str"),
     ("presence", "xsi_password", "admin", "secret"),
+    ("presence", "channels", "admin", "str"),
     ("admin", "xsi_host", "admin", "str"),
     ("admin", "username", "admin", "str"),
     ("admin", "password", "admin", "secret"),
@@ -74,6 +75,7 @@ LABELS = {
     ("admin", "username"): "Admin login", ("admin", "password"): "Admin password",
     ("presence", "xsi_user"): "Directory login",
     ("presence", "xsi_password"): "Directory password", ("presence", "mode"): "Presence source",
+    ("presence", "channels"): "Event channels",
     ("app", "mode"): "Mode", ("update", "source"): "Update source",
 }
 APP_MODES = ("phone", "presence")
@@ -264,6 +266,11 @@ class SettingsManager:
                     raise SettingsError(f"{name} must be a number of seconds")
                 if f < 2 or f > 600:
                     raise SettingsError(f"{name} must be between 2 and 600 seconds")
+            elif (sec, key) == ("presence", "channels"):
+                if v == "":
+                    v = "0"
+                if not v.isdigit() or int(v) > 8:
+                    raise SettingsError(f"{name} must be a number from 0 (automatic) to 8")
             prob = config_store.check_value(v)
             if prob:
                 raise SettingsError(f"{name} {prob}")

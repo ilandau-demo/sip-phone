@@ -82,6 +82,17 @@ calls, hold and Do Not Disturb for everyone in the company directory your
 login may monitor. Nothing is polled for presence; the directory is re-read
 every 15 minutes and subscriptions are renewed before they lapse.
 
+**Speed (2.5.0).** Changes are pushed all the way to the screen: the page and
+the browser bridge hold one `/api/stream` (Server-Sent Events) and paint a
+teammate's change 2–40 ms after the engine applies it. The Xsp gates each
+event channel on the previous acknowledgement, so large directories get
+several channels (1 up to 50 people, 2 up to 150, 4 above; `[presence]
+channels`, max 8) with one in-flight ack per channel — a burst of 100 events
+across 300 people clears in under a second. Every event is timed; the Team
+footer shows "updates in 0.4 s (p95; platform 0.3 s)" and
+`/api/presence/health` carries `latency` (platform / engine / ack_rtt /
+render) and `channels`. If the stream drops the page polls until it is back.
+
 Two logins, one engine (`sipphone/presence/`):
 
 ```ini

@@ -228,3 +228,100 @@ class PureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def big_team(n):
+    return [(f"agent{i:04d}@nextiva.com", f"Agent{i}", "Smith", str(2000 + i)) for i in range(n)]
+
+
+class ThroughputTests(unittest.TestCase):
+    """Several channels per channel set: each one is gated on its own ack, so a
+    burst of events clears N times faster. The mock gates like the Xsp does."""
+
+    def setUp(self):
+        pm.HEARTBEAT = 0.5
+        self.d = tempfile.mkdtemp()
+
+    def tearDown(self):
+        pm.HEARTBEAT = 15.0
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def run_burst(self, people, channels, events=40, rtt=0.04):
+        team = big_team(people)
+        mock = MockXsi(team)
+        mock.ack_gate = True; mock.ack_delay = rtt
+        mon = PresenceManager(user_creds(mock), cache_path=os.path.join(self.d, f"dir{channels}.json"),
+                              concurrency=12, channels=channels)
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"] and len(mock.subs) == 2 * people, 60))
+            self.assertTrue(wait(lambda: len(mock.acks) >= 2 * people, 60))     # initial states drained
+            time.sleep(0.3)
+            ids = [t[0] for t in team]
+            t0 = time.time()
+            for i in range(events):
+                mock.push(ids[i % people], "CallReceivedEvent", call_xml(f"b{i}", "Alerting", "Terminator", "Dana", "6165551234"))
+            self.assertTrue(wait(lambda: sum(1 for u in mon.snapshot()["users"] if u["status"] == "ringing") >= min(events, people), 30))
+            took = time.time() - t0
+            return took, mon.health(), mock
+        finally:
+            mon.stop(); mock.stop()
+
+    def test_more_channels_clear_a_burst_faster(self):
+        slow, h1, _ = self.run_burst(people=60, channels=1)
+        fast, h4, m4 = self.run_burst(people=60, channels=4)
+        self.assertEqual(h1["channels"]["open"], 1)
+        self.assertEqual(h4["channels"]["open"], 4)
+        # 40 gated events at 40 ms each ≈ 1.6 s on one channel; four channels ≈ 0.4 s
+        print(f"\n   burst of 40 gated events: 1 channel {slow:.2f}s, 4 channels {fast:.2f}s")
+        self.assertGreater(slow, 1.0, f"one channel should be ack-gated: {slow:.2f}s")
+        self.assertLess(fast, slow / 2, f"four channels should be much faster: {fast:.2f}s vs {slow:.2f}s")
+        lat = h4["latency"]
+        self.assertGreater(lat["ack_rtt"]["n"], 30)
+        self.assertGreaterEqual(lat["ack_rtt"]["p50"], 0.03)
+        self.assertLess(lat["engine"]["p95"], 0.05)
+        self.assertEqual(lat["channels"], 4)
+        self.assertIsNotNone(lat["end_to_end_p95"])
+
+    def test_channel_count_is_automatic_and_capped_by_the_platform(self):
+        self.assertEqual(pm.auto_channels(11), 1)
+        self.assertEqual(pm.auto_channels(120), 2)
+        self.assertEqual(pm.auto_channels(300), 4)
+        team = big_team(5)
+        mock = MockXsi(team); mock.max_channels = 1
+        mon = PresenceManager(user_creds(mock), cache_path=os.path.join(self.d, "cap.json"), channels=3)
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+            h = mon.health()
+            self.assertEqual(h["channels"]["open"], 1)          # asked for 3, platform allowed 1
+            self.assertEqual(h["channels"]["wanted"], 3)
+            self.assertTrue(mon.snapshot()["connected"])
+        finally:
+            mon.stop(); mock.stop()
+
+    def test_ack_path_is_remembered_across_restarts(self):
+        team = big_team(3)
+        mock = MockXsi(team); mock.ack_mode = "async"          # only the async path acks
+        cache = os.path.join(self.d, "ack.json")
+        mon = PresenceManager(user_creds(mock), cache_path=cache)
+        mon.start()
+        try:
+            self.assertTrue(wait(lambda: mon.snapshot()["ready"], 20))
+            mock.push(team[0][0], "CallReceivedEvent", call_xml("x", "Alerting"))
+            self.assertTrue(wait(lambda: mock.acks, 5))
+            self.assertTrue(wait(lambda: mon.directory.cache.get("ack_path", "").startswith("/com.broadsoft.async"), 5))
+        finally:
+            mon.stop()
+        import json
+        self.assertIn("async", json.load(open(cache))["extra"]["ack_path"])
+        mock.acks.clear(); mock.ack_mode = "fail_plain_count"
+        # a new engine starts with the remembered path: the first ack goes straight to the async path
+        requests_before = []
+        mon2 = PresenceManager(user_creds(mock), cache_path=cache)
+        mon2.start()
+        try:
+            self.assertTrue(wait(lambda: mon2.snapshot()["ready"], 20))
+            self.assertEqual(mon2.client.ack_path, "/com.broadsoft.async/com.broadsoft.xsi-events/v2.0/channel/eventresponse")
+        finally:
+            mon2.stop(); mock.stop()

@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -13,7 +14,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 from tests.test_flows import MockSwitch, USER, PASS, AUTH, REALM  # noqa: E402
 from tests.mock_xsi_events import MockXsi, USER as XU, PW as XPW, call_xml  # noqa: E402
-from tests.test_presence_engine import TEAM, BOB, wait  # noqa: E402
+from tests.test_presence_engine import TEAM, ALICE, BOB, wait  # noqa: E402
 from sipphone import config_store, web  # noqa: E402
 from sipphone.cli import load_config, make_monitor, app_mode  # noqa: E402
 from sipphone.phone import SIPPhone, CallState  # noqa: E402
@@ -221,9 +222,9 @@ class ExtensionHelloTests(PresenceModeTests):
         import sipphone.native_host as nh
         from sipphone import cli
         new = "abcdefghijklmnopabcdefghijklmnop"
-        orig_find = cli.find_config
+        orig_find, orig_reg = cli.find_config, nh.register_bridge
         cli.find_config = lambda explicit="": self.p       # the allow-list reads this test's config
-        nh.register_bridge = lambda exe="": {"ok": True, "where": ["test"], "path": "", "note": ""}
+        nh.register_bridge = lambda exe="": {"ok": True, "where": ["test"], "path": "", "note": "", "changed": True}
         try:
             self.assertNotIn(new, allowed_extension_ids())
             code, j = self.hello(new, f"chrome-extension://{new}")
@@ -234,7 +235,7 @@ class ExtensionHelloTests(PresenceModeTests):
             code, j = self.hello(new, f"chrome-extension://{new}")        # second time: known, nothing added
             self.assertEqual(code, 200); self.assertFalse(j["added"])
         finally:
-            cli.find_config = orig_find
+            cli.find_config = orig_find; nh.register_bridge = orig_reg
 
     def test_mismatched_or_missing_origin_is_refused(self):
         bad = "ppppppppppppppppppppppppppppppp" + "p"
@@ -248,3 +249,99 @@ class ExtensionHelloTests(PresenceModeTests):
         self.assertNotEqual(code, 200)
         from sipphone.native_host import allowed_extension_ids
         self.assertNotIn(bad, allowed_extension_ids())
+
+
+class StreamTests(PresenceModeTests):
+    """/api/stream pushes team changes the moment the engine applies them."""
+    def test_no_registration_but_presence_works(self): pass
+
+    def read_sse(self, resp, kinds, t=5.0):
+        """Collect SSE messages until one of `kinds` arrives (or timeout)."""
+        import socket
+        end = time.time() + t
+        got = []
+        buf = b""
+        resp.fp.raw._sock.settimeout(0.5) if hasattr(resp.fp, "raw") else None
+        while time.time() < end:
+            try:
+                chunk = resp.fp.read1(65536)
+            except (socket.timeout, TimeoutError):
+                continue
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n\n" in buf:
+                msg, buf = buf.split(b"\n\n", 1)
+                kind, data = "", ""
+                for line in msg.decode().splitlines():
+                    if line.startswith("event: "): kind = line[7:]
+                    elif line.startswith("data: "): data = line[6:]
+                if kind:
+                    got.append((kind, json.loads(data)))
+                    if (callable(kinds) and kinds(kind, got[-1][1])) or (not callable(kinds) and kind in kinds):
+                        return got
+        return got
+
+    def test_stream_opens_with_snapshots_and_pushes_changes(self):
+        self.assertTrue(wait(lambda: self.req("/api/monitor")[1].get("ready"), 20))
+        import http.client
+        conn = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)
+        conn.request("GET", "/api/stream?since=0")
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 200)
+        self.assertIn("text/event-stream", resp.getheader("Content-Type"))
+        got = self.read_sse(resp, {"team"})
+        kinds = [k for k, _ in got]
+        self.assertEqual(kinds[:2], ["state", "team"])
+        team0 = got[1][1]
+        self.assertTrue(team0["full"]); self.assertEqual(len(team0["users"]), 3)
+        self.assertEqual(team0["meta"]["enabled"], True)
+        # push: only the changed person arrives, fast
+        t0 = time.time()
+        self.mock.push(BOB, "CallReleasedEvent", call_xml("c1", "Released", "Terminator"))
+        got = self.read_sse(resp, lambda k, p: k == "team" and any(u["user_id"] == BOB for u in p["users"]), 5)
+        took = time.time() - t0
+        team = [p for k, p in got if k == "team"][-1]
+        self.assertFalse(team["full"])
+        self.assertEqual([u["user_id"] for u in team["users"]], [BOB])
+        self.assertEqual(team["users"][0]["status"], "available")
+        self.assertLess(took, 0.5, f"push took {took:.3f}s")
+        print(f"\n   stream: change pushed in {took*1000:.0f} ms")
+        # an event line is pushed as state with the new event
+        self.srv.ui_state.add("event", "hello stream")
+        got = self.read_sse(resp, lambda k, p: k == "state" and any(e["text"] == "hello stream" for e in p["events"]), 5)
+        self.assertTrue(got and got[-1][0] == "state")
+        # render metrics come back
+        code, j = self.req("/api/presence/metrics", {"render": [0.02, 0.03]})
+        self.assertEqual(code, 200)
+        h = self.req("/api/presence/health")[1]
+        self.assertEqual(h["latency"]["render"]["n"], 2)
+        self.assertGreaterEqual(h["latency"]["engine"]["n"], 1)
+        self.assertEqual(self.srv.ui_state.stream_clients(), 1)
+        resp.close(); conn.close()                      # the server notices on its next keep-alive
+        self.assertTrue(wait(lambda: self.srv.ui_state.stream_clients() == 0, 10))
+
+    def test_bridge_follows_the_stream(self):
+        """The native host learns of a change from the push stream (not its 1 s poll)."""
+        from sipphone import native_host as nh
+        self.assertTrue(wait(lambda: self.req("/api/monitor")[1].get("ready"), 20))
+        old_base, nh.BASE = nh.BASE, self.base
+        nh._follower = None
+        sent = []
+        class Ch:
+            def send(self, m): sent.append((time.time(), dict(m)))
+        stop = threading.Event()
+        t = threading.Thread(target=nh.pump, args=(Ch(), stop, 1.0), daemon=True); t.start()
+        try:
+            self.assertTrue(wait(lambda: nh._follower is not None and nh._follower.fresh(), 10))
+            self.assertTrue(wait(lambda: any(m.get("up") for _, m in sent), 5))
+            time.sleep(1.2)                        # past the next poll tick: the pump now sleeps on the stream
+            n0 = len(sent); t0 = time.time()
+            self.mock.push(ALICE, "CallReceivedEvent", call_xml("r1", "Alerting", "Terminator", "Dana", "6165551234"))
+            self.assertTrue(wait(lambda: any("Alice Adams" in (m.get("team") or {}).get("ringing", []) for _, m in sent[n0:]), 3))
+            at = next(ts for ts, m in sent[n0:] if "Alice Adams" in (m.get("team") or {}).get("ringing", []))
+            took = at - t0
+            print(f"\n   bridge saw the ring {took*1000:.0f} ms after the push")
+            self.assertLess(took, 0.3)
+        finally:
+            stop.set(); nh.BASE = old_base; nh._follower = None

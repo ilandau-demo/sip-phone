@@ -27,7 +27,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Optional
+from typing import Dict, Optional
 
 HOST_NAME = "com.sipphone.host"
 UI_PORT = int(os.environ.get("SIPPHONE_UI_PORT", "8088"))
@@ -301,15 +301,7 @@ def bridge_status() -> dict:
 
 
 # ---------------------------------------------------------------- status pump
-def build_status() -> dict:
-    try:
-        s = _http("/api/state?since=999999999", timeout=5.0)
-    except Exception as e:
-        # A refused connection means the app is gone; anything else (a slow
-        # answer, a transient server error) is reported so it can be debounced.
-        refused = isinstance(e, (ConnectionRefusedError, urllib.error.URLError)) and \
-            isinstance(getattr(e, "reason", e), ConnectionRefusedError)
-        return {"type": "status", "up": False, "updating": _updating(), "_err": repr(e), "_refused": refused}
+def _status_from_state(s: dict) -> dict:
     st = {"type": "status", "up": True, "version": s.get("version"),
           "mode": s.get("mode", "phone"),
           "registered": s.get("registered"), "reg_detail": s.get("reg_detail"),
@@ -320,6 +312,124 @@ def build_status() -> dict:
     if c:
         st["call"] = {"state": c.get("state"), "number": c.get("number"),
                       "name": c.get("name") or "", "elapsed": c.get("elapsed", "")}
+    return st
+
+
+class StreamFollower(threading.Thread):
+    """Keeps the app's pushed state (/api/stream) so the badge and notifications
+    change the moment the app does, instead of on the next 1 s poll. If the
+    stream is down the pump falls back to polling by itself."""
+
+    BUSY = ("ringing", "dialing", "on-call", "on-hold")
+
+    def __init__(self, wake: threading.Event) -> None:
+        super().__init__(name="bridge-stream", daemon=True)
+        self.wake = wake
+        self.state: Optional[dict] = None
+        self.team_users: Dict[str, dict] = {}
+        self.team_meta: Optional[dict] = None
+        self.last_seen = 0.0
+        self.live = False
+        self.lock = threading.Lock()
+
+    def fresh(self, within: float = 8.0) -> bool:
+        return self.live and (time.time() - self.last_seen) < within
+
+    def monitor_view(self) -> Optional[dict]:
+        """The pushed team in the shape /api/monitor returns."""
+        with self.lock:
+            if self.team_meta is None:
+                return None
+            if not self.team_meta.get("enabled", True):
+                return {"enabled": False}
+            users = list(self.team_users.values())
+            m = dict(self.team_meta, users=users, total=len(users),
+                     active=sum(1 for u in users if u.get("status") in self.BUSY))
+            return m
+
+    def _apply_team(self, m: dict) -> None:
+        with self.lock:
+            if m.get("enabled") is False:
+                self.team_meta = {"enabled": False}; self.team_users = {}
+                return
+            if m.get("full") or not self.team_users:
+                self.team_users = {u["user_id"]: u for u in m.get("users", [])}
+            else:
+                for u in m.get("users", []):
+                    self.team_users[u["user_id"]] = u
+                for uid in m.get("removed", []):
+                    self.team_users.pop(uid, None)
+            self.team_meta = dict(m.get("meta") or {}, enabled=True)
+
+    def run(self) -> None:
+        while True:
+            try:
+                req = urllib.request.Request(BASE + "/api/stream?since=999999999", headers={"Accept": "text/event-stream"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    kind, data = "", ""
+                    while True:
+                        line = r.readline()
+                        if not line:
+                            break
+                        self.last_seen = time.time()
+                        line = line.decode("utf-8", "replace").rstrip("\r\n")
+                        if line.startswith("event: "):
+                            kind = line[7:]
+                        elif line.startswith("data: "):
+                            data = line[6:]
+                        elif line == "":
+                            if kind and data:
+                                try:
+                                    payload = json.loads(data)
+                                except ValueError:
+                                    payload = None
+                                if payload is not None:
+                                    if kind == "state":
+                                        with self.lock:
+                                            self.state = payload
+                                    elif kind == "team":
+                                        self._apply_team(payload)
+                                    self.live = True
+                                    self.wake.set()
+                            kind, data = "", ""
+            except Exception as e:
+                if self.live:
+                    log.info("app stream ended (%s); polling until it is back", e)
+            self.live = False
+            self.wake.set()
+            time.sleep(1.0)
+
+
+_follower: Optional[StreamFollower] = None
+
+
+def build_status() -> dict:
+    f = _follower
+    if f is not None and f.fresh() and f.state is not None:
+        with f.lock:
+            s = dict(f.state)
+        st = _status_from_state(s)
+        if s.get("has_monitor"):
+            m = f.monitor_view()
+            if m is None or m.get("enabled") is False:
+                try:
+                    m = _http("/api/monitor")
+                except Exception:
+                    m = None
+            if m:
+                ringing = [u["name"] for u in m.get("users", []) if u.get("status") == "ringing"]
+                st["team"] = {"active": m.get("active", 0), "total": m.get("total", 0),
+                              "ringing": ringing, "error": m.get("last_error") or ""}
+        return st
+    try:
+        s = _http("/api/state?since=999999999", timeout=5.0)
+    except Exception as e:
+        # A refused connection means the app is gone; anything else (a slow
+        # answer, a transient server error) is reported so it can be debounced.
+        refused = isinstance(e, (ConnectionRefusedError, urllib.error.URLError)) and \
+            isinstance(getattr(e, "reason", e), ConnectionRefusedError)
+        return {"type": "status", "up": False, "updating": _updating(), "_err": repr(e), "_refused": refused}
+    st = _status_from_state(s)
     if s.get("has_monitor"):
         try:
             m = _http("/api/monitor")
@@ -351,12 +461,18 @@ def _report_caller() -> bool:
         return False
 
 
-def pump(ch: Channel, stop: threading.Event, interval: float = 1.0) -> None:
+def pump(ch: Channel, stop: threading.Event, interval: float = 1.0, follow: bool = True) -> None:
+    global _follower
+    wake = threading.Event()
+    if follow and _follower is None:
+        _follower = StreamFollower(wake)
+        _follower.start()
     last = None
     beat = 0.0
     misses = 0
     reported = False
     while not stop.is_set():
+        wake.clear()
         st = build_status()
         if not st.get("up") and not st.get("updating") and not st.get("_refused"):
             # One slow or failed poll must not flip the panel to "stopped":
@@ -392,7 +508,8 @@ def pump(ch: Channel, stop: threading.Event, interval: float = 1.0) -> None:
         if k != last or now - beat > 20:        # on change, plus a heartbeat
             ch.send(st)
             last, beat = k, now
-        stop.wait(interval)
+        # a pushed change wakes us at once; otherwise poll on the interval
+        wake.wait(interval) if (_follower is not None and _follower.fresh()) else stop.wait(interval)
 
 
 # ------------------------------------------------------------------- commands

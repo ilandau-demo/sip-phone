@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SIP Phone",
-  "version": "2.4.7",
+  "version": "2.5.0",
   "description": "Side-panel softphone: click-to-call, incoming-call alerts, and your team's live presence - with the desktop app, or on its own.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2eoTaM6Rkowya/YYluGIEy75OMIcBmuLbumTmkIN4ofIhvwjuj5iymae+G/83nLV5CflWsRDYnz3EYCvqct1REpbBsWGhuWavuRj8YmLoyWC9sDKjOgye9DKWtEdmqCC7ctrwvAHcHaa6BsdhXvz8ZzBi1bm+36w4ucN21QCdfIExqZebW8i3GoWM8gPPxO6DU4XBAp0BvdCVXFSsylrVw5lC58uuWYZYVa1O5xia7zQQlFezOetKvEgNOOcvrEXyqIqADAsf74nh1F/JO2chQ0Hg6UXqxxuPr6DhaVfEmaHoiP6XpXkP3Ry4g6nxxH5HGOwxblnQWUoN3Nf8VZpMwIDAQAB",

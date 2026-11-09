@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections
 import json
+import queue
 import logging
 import os
 import threading
@@ -58,6 +59,15 @@ class UIState:
         self.voice = None             # voice.VoiceEngine
         self._history = self._load_history()
         self._answered: set = set()
+        # -- push stream (/api/stream): one queue per connected page/bridge ----------
+        self._streams: list = []
+        self._stream_lock = threading.Lock()
+        self._team_dirty = threading.Event()
+        self._team_last: dict = {}          # user_id -> json of the person as last sent
+        self._team_meta_last = ""
+        self._team_seq = 0
+        self._state_sig = ""
+        self._ticker_started = False
         stt = getattr(audio, "stt", None)
         if stt is not None:
             prev = stt.on_text
@@ -159,6 +169,8 @@ class UIState:
         with self.lock:
             self.events.append({"id": self.next_id, "kind": kind, "text": text, "t": time.time()})
             self.next_id += 1
+        if self.stream_clients():
+            threading.Thread(target=self._push_state, kwargs={"force": True}, daemon=True).start()
 
     # -- presence engine hookup --------------------------------------------------
     @property
@@ -170,6 +182,142 @@ class UIState:
         self._monitor = mon
         if mon is not None and getattr(mon, "on_change", None):
             mon.on_change(self._presence_changed)
+        if mon is not None and getattr(mon, "on_update", None):
+            mon.on_update(self._team_dirty.set)
+        with self._stream_lock:
+            self._team_last = {}
+            self._team_meta_last = ""
+        self._team_dirty.set()
+
+    # -- push stream ---------------------------------------------------------------
+    # Pages and the browser bridge used to poll /api/state and /api/monitor every
+    # second; that put up to a second between a presence event and the screen.
+    # Now they open /api/stream once and get pushed: `team` carries only the
+    # people whose row changed (computed the moment the engine applies an
+    # event), `state` the call/phone snapshot (checked every 200 ms in-process,
+    # and immediately on every new event line), `event` each new event line.
+    def stream_open(self, since: int) -> "queue.Queue":
+        q: "queue.Queue" = queue.Queue(maxsize=500)
+        q.since = since                                   # type: ignore[attr-defined]
+        with self._stream_lock:
+            self._streams.append(q)
+            start = not self._ticker_started
+            self._ticker_started = True
+        if start:
+            threading.Thread(target=self._stream_ticker, name="ui-stream", daemon=True).start()
+        return q
+
+    def stream_close(self, q) -> None:
+        with self._stream_lock:
+            if q in self._streams:
+                self._streams.remove(q)
+
+    def stream_clients(self) -> int:
+        with self._stream_lock:
+            return len(self._streams)
+
+    def _stream_put(self, kind: str, payload: dict, only=None) -> None:
+        with self._stream_lock:
+            targets = list(self._streams) if only is None else [only]
+        for q in targets:
+            try:
+                q.put_nowait((kind, payload))
+            except queue.Full:                 # a page that stopped reading: drop it
+                self.stream_close(q)
+
+    def _state_signature(self, snap: dict) -> str:
+        return json.dumps({k: v for k, v in snap.items() if k not in ("events", "expires_in", "notifications")},
+                          sort_keys=True, default=str)
+
+    def _push_state(self, force: bool = False) -> None:
+        """Send the phone snapshot to every stream if it changed (per-client event
+        lines ride along, so nothing is ever lost between pushes)."""
+        with self._stream_lock:
+            clients = list(self._streams)
+        if not clients:
+            return
+        snap = self.snapshot(0)
+        sig = self._state_signature(snap)
+        changed = sig != self._state_sig
+        self._state_sig = sig
+        for q in clients:
+            since = getattr(q, "since", 0)
+            with self.lock:
+                ev = [e for e in self.events if e["id"] > since]
+            if not (changed or force or ev):
+                continue
+            out = dict(snap, events=ev)
+            if ev:
+                q.since = ev[-1]["id"]          # type: ignore[attr-defined]
+            self._stream_put("state", out, only=q)
+
+    def _push_team(self) -> None:
+        mon = self._monitor
+        if not self.stream_clients():
+            with self._stream_lock:
+                self._team_last = {}; self._team_meta_last = ""
+            return
+        if mon is None:
+            payload = {"enabled": False}
+            if self._team_meta_last != "off":
+                self._team_meta_last = "off"
+                self._stream_put("team", payload)
+            return
+        snap = mon.snapshot(); snap["enabled"] = True
+        users = snap.pop("users")
+        meta = snap
+        t_applied = meta.get("t", time.time())
+        cur = {u["user_id"]: json.dumps(u, sort_keys=True, default=str) for u in users}
+        with self._stream_lock:
+            removed = [uid for uid in self._team_last if uid not in cur]
+            changed = [u for u in users if self._team_last.get(u["user_id"]) != cur[u["user_id"]]]
+            full = not self._team_last or len(changed) > len(users) // 2
+            self._team_last = cur
+            meta_json = json.dumps({k: v for k, v in meta.items() if k not in ("t", "latency", "last_poll")},
+                                   sort_keys=True, default=str)
+            meta_changed = meta_json != self._team_meta_last
+            self._team_meta_last = meta_json
+            self._team_seq += 1
+            seq = self._team_seq
+        if not (changed or removed or meta_changed or full):
+            return
+        self._stream_put("team", {"seq": seq, "full": full, "users": users if full else changed,
+                                  "removed": removed, "meta": meta, "t": t_applied})
+
+    def team_opening(self) -> dict:
+        """Full team payload for a page that just connected; also seeds the
+        diff baseline so the next push carries only what changed."""
+        mon = self._monitor
+        if mon is None:
+            return {"enabled": False}
+        ts = mon.snapshot(); ts["enabled"] = True
+        users = ts.pop("users")
+        with self._stream_lock:
+            self._team_last = {u["user_id"]: json.dumps(u, sort_keys=True, default=str) for u in users}
+            self._team_meta_last = json.dumps({k: v for k, v in ts.items() if k not in ("t", "latency", "last_poll")},
+                                              sort_keys=True, default=str)
+            seq = self._team_seq
+        return {"seq": seq, "full": True, "users": users, "removed": [], "meta": ts, "t": ts.get("t", time.time())}
+
+    def _stream_ticker(self) -> None:
+        last_state = 0.0
+        while True:
+            fired = self._team_dirty.wait(timeout=0.2)
+            if fired:
+                self._team_dirty.clear()
+                time.sleep(0.015)                     # coalesce a burst of events into one push
+                self._team_dirty.clear()
+                try:
+                    self._push_team()
+                except Exception:                   # pragma: no cover
+                    log.exception("team push failed")
+            now = time.time()
+            if now - last_state >= 0.2:
+                last_state = now
+                try:
+                    self._push_state()
+                except Exception:                   # pragma: no cover
+                    log.exception("state push failed")
 
     def _presence_changed(self, person: dict, old: str, new: str) -> None:
         w = self.watcher
@@ -385,6 +533,43 @@ def make_handler(state: UIState):
             log.warning("blocked %s %s: %s", self.command, self.path, why)
             self._json({"error": f"forbidden: {why}"}, 403)
 
+        def _stream(self, since: int) -> None:
+            """Server-Sent Events: the page gets pushed instead of polling."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            q = state.stream_open(since)
+
+            def send(kind: str, payload) -> None:
+                data = json.dumps(payload, default=str)
+                self.wfile.write(f"event: {kind}\ndata: {data}\n\n".encode())
+                self.wfile.flush()
+            try:
+                # opening snapshot: the page can paint without any other request
+                snap = state.snapshot(since)
+                if snap["events"]:
+                    q.since = snap["events"][-1]["id"]   # type: ignore[attr-defined]
+                send("state", snap)
+                send("team", state.team_opening())
+                last = time.time()
+                while True:
+                    try:
+                        kind, payload = q.get(timeout=1.0)
+                    except queue.Empty:
+                        if time.time() - last >= 3:        # also how a gone client is noticed
+                            self.wfile.write(b": keep-alive\n\n"); self.wfile.flush()
+                            last = time.time()
+                        continue
+                    send(kind, payload)
+                    last = time.time()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                state.stream_close(q)
+
         def _json(self, obj, status=200):
             data = json.dumps(obj).encode()
             self.send_response(status)
@@ -464,6 +649,8 @@ def make_handler(state: UIState):
                     if kv.startswith("since="):
                         since = int(kv[6:] or 0)
                 self._json(state.snapshot(since))
+            elif u.path == "/api/stream":
+                self._stream(int((q.get("since") or ["0"])[0] or 0))
             elif u.path == "/api/phrases":
                 self._json({"phrases": state.phrases()})
             elif u.path == "/api/scripts":
@@ -592,6 +779,17 @@ def make_handler(state: UIState):
                     if not r["ok"]:
                         raise RuntimeError(r["note"] or "couldn't register the bridge")
                     return self._json({"ok": True, "where": r["where"], "path": r["path"]})
+                elif u.path == "/api/presence/metrics":
+                    # the page reports how long after the engine applied a change it was painted
+                    mon = state.monitor
+                    vals = body.get("render") or []
+                    if mon is not None and isinstance(vals, list):
+                        for v in vals[:200]:
+                            try:
+                                mon.metrics.rendered(float(v))
+                            except (TypeError, ValueError):
+                                pass
+                    return self._json({"ok": True})
                 elif u.path == "/api/extension/seen":
                     # the bridge reports which copy of the extension launched it
                     ext_id = str(body.get("id", "") or "").strip().lower()

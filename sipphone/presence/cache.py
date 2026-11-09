@@ -20,6 +20,33 @@ class DirectoryCache:
     def __init__(self, path: str = "") -> None:
         self.path = path
         self.saved_at = 0.0
+        self.extra: dict = {}            # small facts worth keeping across restarts (e.g. the ack path)
+
+    def get(self, key: str, default=None):
+        if not self.extra and self.path and os.path.exists(self.path):
+            try:
+                with open(self.path, encoding="utf-8") as f:
+                    self.extra = dict(json.load(f).get("extra") or {})
+            except (OSError, ValueError, TypeError):
+                pass
+        return self.extra.get(key, default)
+
+    def set(self, key: str, value) -> None:
+        if self.get(key) == value:
+            return
+        self.extra[key] = value
+        if not self.path or not os.path.exists(self.path):
+            return
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+            data["extra"] = self.extra
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp, self.path)
+        except (OSError, ValueError, TypeError):
+            pass
 
     def load(self) -> List[MonitoredUser]:
         if not self.path or not os.path.exists(self.path):
@@ -37,7 +64,8 @@ class DirectoryCache:
     def save(self, entries: List[MonitoredUser]) -> None:
         if not self.path:
             return
-        data = {"saved_at": time.time(), "entries": [{k: getattr(u, k, "") for k in FIELDS} for u in entries]}
+        data = {"saved_at": time.time(), "entries": [{k: getattr(u, k, "") for k in FIELDS} for u in entries],
+                "extra": self.extra}
         tmp = self.path + ".tmp"
         try:
             os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)

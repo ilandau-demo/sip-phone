@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.5.0 — 2026-11-08 — presence in under a second
+- **Pushed, not polled.** The phone page and the browser bridge open one
+  `/api/stream` (Server-Sent Events) and get every change pushed: Team rows,
+  boards, call state, event lines, notifications. Measured on the mock
+  platform: a teammate's change is painted 2–40 ms after the engine applies it
+  (was up to 1,000 ms on the 1 s poll); the toolbar badge follows in ~20 ms.
+  If the stream drops, the page polls at the old rate and the footer says
+  "live (polling)" until it is back.
+- **Several event channels per channel set.** The Xsp holds a channel's next
+  event until the previous one is acknowledged, so one channel moves about one
+  event per round trip. 2.5.0 opens 1/2/4 channels for directories of up to
+  50/150/more people (`[presence] channels`, 0 = automatic, max 8; also in
+  Settings → Team view → More) and acknowledges in parallel, one in-flight ack
+  per channel. A burst of 100 events on 300 people clears in 0.78 s on the
+  mock with 30 ms acks (four channels; ideal 0.75 s). If the platform refuses
+  extra channels the engine runs on what it got and health says so.
+- **Measured, in the footer.** Every event is timed: platform → us (from the
+  event's own startTime/answerTime), engine, ack round trip, and paint time
+  reported by the page. The Team tab footer shows "updates in 0.4 s (p95;
+  platform 0.3 s)"; `/api/presence/health` has the full breakdown
+  (`latency`, `channels`).
+- Start-up: 300 people subscribe in ~0.5 s (`[admin] concurrency` default 12);
+  the acknowledgement path that worked is remembered in the directory cache so
+  the first ack after a restart does not probe; ack connections are warmed and
+  use TCP_NODELAY.
+- Example config cleaned of the retired BLF options.
+- Extension files unchanged — the store package is a version bump only.
+
 ## 2.4.7 — 2026-11-08
 - Settings → Browser extension no longer asks for a store ID. Both copies of
   the extension (Chrome Web Store, zip/unpacked build) are accepted

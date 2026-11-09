@@ -1,4 +1,4 @@
-SIP PHONE  -  version 2.4.7
+SIP PHONE  -  version 2.5.0
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
@@ -68,6 +68,14 @@ WHAT TO FILL IN
       Only people get presence; tick "Also list as speed dials" to show hunt
       groups, queues, auto attendants etc. as click-to-call entries.
       Hide from the list: your own user ID or extension.
+
+  How fast is it? The Team tab footer says, e.g. "live - updates in 0.4 s (p95;
+  platform 0.3 s)": the time from the phone system emitting a change to it
+  being on screen, and how much of that is the platform's. Changes are pushed
+  to the page (no polling); large teams get several event channels so bursts
+  clear quickly (Settings > Team view > More > Event channels, 0 = automatic).
+  "live (polling)" means the push stream is down and the page is polling
+  every second until it is back.
 
   On the Team tab: type to search (name, extension, department...), click the
   filter chips to narrow by status, click a name for details, and the bell to

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import threading
 import time
 from typing import Callable, Dict, List, Optional
@@ -22,6 +23,7 @@ from ..xsi import XSIClient, XSIError
 from .connection import EXPIRES, EventsClient
 from .directory import Directory
 from .event_processor import EventProcessor
+from .metrics import LatencyMetrics
 from .models import (BUSY, MONITOR_ERROR, MONITOR_OK, MONITOR_PENDING, MONITOR_REFUSED, STATE_LABELS, MonitoredUser,
                      Target, person_dict, sort_people, status_of)
 from .subscriptions import SubscriptionManager
@@ -35,6 +37,21 @@ DIRECTORY_REFRESH = 900.0
 RETRY_PENDING_EVERY = 300.0
 
 ChangeListener = Callable[[dict, str, str], None]     # (person, old_status, new_status)
+UpdateListener = Callable[[], None]                    # "something changed; read snapshot()"
+
+MAX_CHANNELS = 8            # configurable ceiling; automatic choice stops at 4
+_PLATFORM_TIME = re.compile(rb"<[^>]*?(?:answerTime|startTime)>(\d{10,})<")
+
+
+def auto_channels(people: int) -> int:
+    """How many event channels to open for a directory of this size. One
+    channel moves about one event per round trip (the Xsp waits for each ack);
+    busier teams get more channels, each with its own ack gate."""
+    if people <= 50:
+        return 1
+    if people <= 150:
+        return 2
+    return 4
 
 
 class PresenceManager:
@@ -44,7 +61,7 @@ class PresenceManager:
                  hide: Optional[List[str]] = None, show_services: Optional[List[str]] = None,
                  concurrency: int = 6, registration_sweep: bool = True,
                  client: Optional[EventsClient] = None, actions: Optional[XSIClient] = None,
-                 expires: int = EXPIRES) -> None:
+                 expires: int = EXPIRES, channels: int = 0) -> None:
         self.creds = credentials
         self.kind = getattr(credentials, "kind", "user")
         self.actions = actions or XSIClient(credentials.host, credentials.login, credentials.password,
@@ -71,9 +88,13 @@ class PresenceManager:
         self.session_started = 0.0
         self.ack_error = ""
         self._acks: List[str] = []
-        self._ack_thread: Optional[threading.Thread] = None
+        self._ack_threads: List[threading.Thread] = []
         self._prev_status: Dict[str, str] = {}
         self.listeners: List[ChangeListener] = []
+        self.update_listeners: List[UpdateListener] = []
+        self.metrics = LatencyMetrics()
+        self.channels_wanted = max(0, min(MAX_CHANNELS, int(channels or 0)))   # 0 = automatic
+        self.channels_open = 0
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="presence", daemon=True)
         self.list_source = "configured list" if self.configured else "company directory"
@@ -95,6 +116,19 @@ class PresenceManager:
 
     def on_change(self, fn: ChangeListener) -> None:
         self.listeners.append(fn)
+
+    def on_update(self, fn: UpdateListener) -> None:
+        """Called (from the engine's threads) whenever anything may have changed:
+        an event applied, a sweep done, the connection state flipped. The push
+        stream reads snapshot() and sends the differences."""
+        self.update_listeners.append(fn)
+
+    def _notify_update(self) -> None:
+        for fn in self.update_listeners:
+            try:
+                fn()
+            except Exception:                  # pragma: no cover
+                log.exception("presence update listener failed")
 
     # -- who to watch -----------------------------------------------------------
     def _targets_from_directory(self) -> None:
@@ -163,12 +197,27 @@ class PresenceManager:
         self._targets_from_directory()
         with self._lock:
             self.last_error = ""
-        stream, splitter, pending = self.client.open_channel(expires=self.subs.expires)
+        remembered = self.directory.cache.get("ack_path", "")
+        if remembered:
+            self.client.remember_ack_path(remembered)
+        first = self.client.add_channel(expires=self.subs.expires)
+        wanted = self.channels_wanted or auto_channels(len(self.targets))
+        for _ in range(1, wanted):
+            try:
+                self.client.add_channel(expires=self.subs.expires)
+            except XSIError as e:
+                log.info("the platform allowed %d event channel(s) (%s)", len(self.client.channels), e)
+                break
+        channels = list(self.client.channels)
+        self.channels_open = len(channels)
+        self.metrics.channels = len(channels)
+        self.client.warm()                         # the first ack must not pay for a handshake
         with self._lock:
             self.connected = True
             self.last_heartbeat = time.time()
-        log.info("event channel %s open; subscribing to %d people (%s)", self.client.channel_id,
-                 len(self.targets), self.creds.describe())
+        log.info("event channel %s open (%d channel%s); subscribing to %d people (%s)", first.id, len(channels),
+                 "" if len(channels) == 1 else "s", len(self.targets), self.creds.describe())
+        self._notify_update()
         self.subs.subscribe_all(list(self.targets.values()), self._stop)
         if self._stop.is_set():
             return
@@ -181,9 +230,12 @@ class PresenceManager:
                                    "ask your provider for monitoring rights")
             elif self.targets and len(errors) == len(self.targets):
                 self.last_error = errors[0]
-        for doc in pending:
-            self._handle(doc)
+        for ch in channels:
+            for doc in ch.pending:
+                self._handle(doc, time.time())
+            ch.pending = []
         self._emit_changes()
+        self._notify_update()
         session_over = threading.Event()
         failure: List[str] = []
 
@@ -207,6 +259,7 @@ class PresenceManager:
                         retried = now
                         if self.subs.retry_pending(targets):
                             self._emit_changes()
+                            self._notify_update()
                     if self.directory.due():
                         try:
                             if self.directory.refresh():
@@ -215,25 +268,51 @@ class PresenceManager:
                                     fresh = [t for t in self.targets.values() if t.monitor == MONITOR_PENDING]
                                 self.subs.subscribe_all(fresh, self._stop)
                                 self._emit_changes()
+                                self._notify_update()
                         except XSIError as e:
                             log.warning("directory refresh failed: %s", e)
                     if self.registration_sweep and now - swept >= REGISTRATION_SWEEP:
                         swept = now
                         self._sweep_registrations(targets)
+                    if self.client.ack_path and self.directory.cache.get("ack_path") != self.client.ack_path:
+                        self.directory.cache.set("ack_path", self.client.ack_path)
                 except Exception as e:
                     failure.append(f"heartbeat failed: {e}")
-                    self.client.close_stream()           # makes the read loop notice
+                    self.client.close_stream()           # makes the read loops notice
                     return
 
+        def reader(ch) -> None:
+            try:
+                self._read_loop(ch.response, ch.splitter)
+            except XSIError as e:
+                if not self._stop.is_set():
+                    failure.append(str(e))
+            except Exception as e:                      # pragma: no cover
+                failure.append(f"{type(e).__name__}: {e}")
+            finally:
+                session_over.set()
+
         threading.Thread(target=keepalive, name="presence-keepalive", daemon=True).start()
+        readers = [threading.Thread(target=reader, args=(ch,), name=f"presence-read-{i}", daemon=True)
+                   for i, ch in enumerate(channels)]
+        for t in readers:
+            t.start()
         try:
-            self._read_loop(stream, splitter)
+            while not session_over.wait(0.5):
+                pass
         finally:
             session_over.set()
+            self.client.close_stream()                 # one channel down → restart the whole session
+            for t in readers:
+                t.join(timeout=5)
             with self._lock:
                 self.connected = False
+                self.channels_open = 0
+            self._notify_update()
         if failure:
             raise XSIError(failure[0])
+        if not self._stop.is_set():
+            raise XSIError("the event channel was closed")
 
     def _read_loop(self, stream, splitter) -> None:
         import http.client
@@ -249,17 +328,29 @@ class PresenceManager:
                 raise XSIError(f"the event channel dropped ({type(e).__name__})")
             if not chunk:
                 raise XSIError("the event channel was closed by the server")
-            for doc in splitter.feed(chunk):
-                kind = self._handle(doc)
+            t_recv = time.time()
+            docs = splitter.feed(chunk)
+            for doc in docs:
+                kind = self._handle(doc, t_recv)
                 if kind == "terminated":
                     raise XSIError("the event channel was terminated by the server")
-            self._emit_changes()
+            if docs:
+                self._emit_changes()
+                self._notify_update()
 
-    def _handle(self, doc: bytes) -> str:
+    def _handle(self, doc: bytes, t_recv: float = 0.0) -> str:
         kind = self.processor.handle(doc)
         if kind == "heartbeat":
             with self._lock:
                 self.last_heartbeat = time.time()
+            return kind
+        if kind and kind not in ("duplicate", "stale", "terminated", "") and t_recv:
+            platform_ms = None
+            if kind in ("CallReceivedEvent", "CallAnsweredEvent", "CallOriginatedEvent"):
+                m = _PLATFORM_TIME.search(doc)
+                if m:
+                    platform_ms = int(m.group(1))
+            self.metrics.event(t_recv, time.time(), platform_ms)
         return kind
 
     # -- registrations (Offline) ------------------------------------------------------
@@ -282,24 +373,37 @@ class PresenceManager:
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(one, monitored))
         self._emit_changes()
+        self._notify_update()
 
     # -- acknowledgements -----------------------------------------------------------------
+    def _ack_workers_wanted(self) -> int:
+        # one in-flight ack per channel (each channel is gated on its own ack),
+        # at least two so a slow ack never holds the whole set
+        return max(2, self.channels_open or 1)
+
     def _ack_later(self, event_id: str) -> None:
         with self._lock:
             self._acks.append(event_id)
-            if self._ack_thread is None or not self._ack_thread.is_alive():
-                self._ack_thread = threading.Thread(target=self._ack_worker, name="presence-ack", daemon=True)
-                self._ack_thread.start()
+            self.metrics.queue(len(self._acks))
+            # every live worker is busy with an ack (idle ones exit), so a new
+            # one is needed whenever there is room for it
+            self._ack_threads = [t for t in getattr(self, "_ack_threads", []) if t.is_alive()]
+            if len(self._ack_threads) < self._ack_workers_wanted():
+                t = threading.Thread(target=self._ack_worker, name=f"presence-ack-{len(self._ack_threads)}", daemon=True)
+                self._ack_threads.append(t)
+                t.start()
 
     def _ack_worker(self) -> None:
         while True:
             with self._lock:
                 if not self._acks:
-                    self._ack_thread = None
                     return
                 event_id = self._acks.pop(0)
+                depth = len(self._acks)
             try:
+                t0 = time.time()
                 self.client.ack(event_id)
+                self.metrics.ack(time.time() - t0, depth)
                 if self.ack_error:
                     with self._lock:
                         self.ack_error = ""
@@ -370,7 +474,10 @@ class PresenceManager:
                     "reconnects": list(self.reconnects), "ack_error": self.ack_error,
                     "duplicates_dropped": self.processor.duplicates, "stale_dropped": self.processor.stale_dropped,
                     "directory": self.directory.status(), "registration_sweep": self._sweep_allowed,
-                    "login": self.creds.describe(), "last_error": self.last_error, "requests": self.client.requests}
+                    "login": self.creds.describe(), "last_error": self.last_error, "requests": self.client.requests,
+                    "channels": {"open": self.channels_open, "wanted": self.channels_wanted or auto_channels(len(ts)),
+                                 "ids": [c.id for c in self.client.channels]},
+                    "latency": self.metrics.summary()}
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -385,4 +492,5 @@ class PresenceManager:
         return {"users": out, "services": services, "ready": ready, "last_poll": last, "last_error": err, "active": active,
                 "total": len(out), "source": "events", "login": self.kind, "connected": connected, "stale": stale,
                 "list_source": self.list_source, "refused": refused, "ack_error": self.ack_error,
-                "directory": self.directory.status(), "states": STATE_LABELS}
+                "directory": self.directory.status(), "states": STATE_LABELS,
+                "latency": self.metrics.summary(), "channels": self.channels_open, "t": time.time()}
