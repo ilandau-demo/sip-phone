@@ -12,26 +12,65 @@ BYE in both directions, inbound call answer/reject, OPTIONS keep-alive, G.711
 python3 -m unittest tests.test_flows -v      # 13 tests, ~6 s, no network needed
 ```
 
+## Get started (for people who just want to use it)
+
+**Team view only (no install):** add the **SIP Phone** extension from the
+Chrome Web Store → click its icon → *Just show my team* → enter your Nextiva
+user login. Presence streams straight into the browser's side panel. Nothing
+else to install.
+
+**Phone + Team view (calls, text-to-speech, transcript) — Windows, 3 steps:**
+
+1. Download the latest `SIP-Phone-<version>.zip` from the
+   [`releases/`](releases/) folder of this repo (open the newest version
+   folder, click the zip, then **Download**).
+2. Right-click the zip → *Extract All*, open the extracted folder and
+   double-click **`Install.bat`**. Answer its questions (Enter = default). If
+   Windows shows "Windows protected your PC", choose *More info → Run anyway*.
+   No Python on the PC? The installer offers to install it.
+3. SIP Phone opens in your browser on its Settings screen. Choose **Phone +
+   Team view**, fill in **Settings → Phone line** with the device details from
+   NextOS (*Voice & Analytics → Users → Manage Users → (user) → Device*, device
+   type **Generic SIP Phone**: SIP Username, Authentication Name, Password,
+   Domain), click **Save**. The header changes to "*you* is registered".
+
+Then start it from **SIP Phone** in the Start menu (right-click → *Pin to
+Start*). The browser extension connects to the running app by itself — install
+it from the Chrome Web Store (or `Install.bat` sets it up) and the side panel
+shows the phone instead of just the team board.
+
+Full details, including the Team view logins and what every setting means, are
+in `READ ME FIRST.txt` inside the zip.
+
+**Updating:** Settings → Updates → *Install from file* with the new
+`sipphone-<version>-py3-none-any.whl` from `releases/`, or run the new
+`Install.bat`. Your settings, contacts and phrases are kept.
+
+**If it won't start / "127.0.0.1 didn't send any data":** run
+`python -m sipphone --diagnose` in PowerShell — it says which install is
+active, what holds the app's port and whether the SIP password registers.
+
 ## Install (Windows, PowerShell)
 
 ```powershell
-pip install --upgrade sipphone-1.1.0-py3-none-any.whl     # or any newer version file
-pip install piper-tts                                     # optional: text-to-speech
-sipphone --init                                           # creates and opens your config.ini
-sipphone --tts piper --ui                                 # run
+pip install --upgrade sipphone-<version>-py3-none-any.whl   # from releases/
+pip install piper-tts                                       # optional: text-to-speech
+python -m sipphone --setup                                  # settings, Start-menu entry, browser bridge
 ```
 
-Updates are the same `pip install --upgrade <new .whl>`; your config, contacts and
-phrases live in `%APPDATA%\sipphone` and are never touched by an update.
-(`sipphone --version` shows what's installed.) If you already have a
-`config.ini` in the folder you run from, that one is used instead.
+Updates are the same `pip install --upgrade <new .whl>` (or Settings → Updates);
+your config, contacts and phrases live in `%APPDATA%\sipphone` and are never
+touched by an update. (`python -m sipphone --version` shows what's installed.)
+If you already have a `config.ini` in the folder you run from, that one is used
+instead.
 
 ### Start-menu app (Windows)
 
 ```powershell
-sipphone --install-shortcut
+python -m sipphone --install-shortcut
 ```
-adds **SIP Phone** to the Start menu — right-click it → *Pin to Start*. It runs
+adds **SIP Phone** to the Start menu (it launches `pythonw -m sipphone.app`, so
+it keeps working across Python updates) — right-click it → *Pin to Start*. It runs
 with no console, opens the UI, and uses the settings in your config (`[tts]
 engine = piper`, `[stt] engine = whisper` are migrated into the voice engine
 on first start). Quit from the UI.
