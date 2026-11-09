@@ -1,4 +1,4 @@
-# sipphone — a SIP 2.0 softphone for Nextiva (and any standard SIP platform)
+# Nextiva Companion App — softphone, team presence and browser extension for Nextiva
 
 ## Get started (for people who just want to use it)
 
