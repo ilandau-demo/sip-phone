@@ -473,6 +473,6 @@ class UpdateManager:
         self.error = ""
         launch_helper(path, ver, self.port)
         if self.ui is not None:
-            self.ui.add("event", f"Installing Telvoro {ver} — back in a moment")
+            self.ui.add("system", f"Installing Telvoro {ver} — back in a moment")
         threading.Timer(0.8, self.on_quit).start()
         return {"ok": True, "version": ver}

@@ -113,7 +113,8 @@ class PresenceModeTests(unittest.TestCase):
         n = self.req("/api/state")[1]["notifications"][-1]
         self.assertEqual((n["event"], n["text"]), ("after-call", "Bob Brown becomes available after a call"))
         self.assertEqual(self.req("/api/presence/watch")[1]["rules"], {})            # one-shot rule consumed
-        self.assertTrue(any(e["kind"] == "notify" for e in self.req("/api/state")[1]["events"]))
+        self.assertTrue(self.req("/api/state")[1]["notifications"])                 # toast, not a transcript line
+        self.assertFalse(any(e["kind"] == "notify" for e in self.req("/api/state")[1]["events"]))
 
     def test_switch_modes_live(self):
         mgr = self.srv.ui_state.settings

@@ -77,6 +77,7 @@ class UIState:
                 self.add("heard", text)
             stt.on_text = heard
         self.events: Deque[dict] = collections.deque(maxlen=500)
+        self.reg_log: Deque[dict] = collections.deque(maxlen=100)    # registration history (Settings)
         self.next_id = 1
         self.lock = threading.Lock()
         self.reg_detail = "Team view only" if getattr(phone, "presence_only", False) else "registering…"
@@ -115,7 +116,10 @@ class UIState:
             if prev_reg:
                 prev_reg(ok, detail)
             self.reg_detail = detail
-            self.add("event", f"Registered ({detail})" if ok else f"Registration failed: {detail}")
+            # registration refreshes are not part of a call: kept for Settings → Phone line,
+            # never written to the call transcript
+            with self.lock:
+                self.reg_log.append({"t": time.time(), "ok": bool(ok), "detail": detail})
 
         phone.on_call_state, phone.on_incoming_call, phone.on_registration = on_state, on_incoming, on_reg
 
@@ -336,7 +340,7 @@ class UIState:
             n = dict(n, id=self.next_id)
             self.notifications.append(n)
             del self.notifications[:-20]
-        self.add("notify", n["text"])
+        # shown as a toast (state.notifications), not as a transcript line
 
     def _call_dict(self, call) -> dict:
         return {"state": call.state.value, "number": call.remote_number,
@@ -643,6 +647,10 @@ def make_handler(state: UIState):
                 self.send_header("Cache-Control", "no-store, must-revalidate")
                 self.end_headers()
                 self.wfile.write(data)
+            elif u.path == "/api/registration":
+                with state.lock:
+                    log_ = list(state.reg_log)[::-1]
+                self._json({"registered": bool(getattr(state.phone, "registered", False)), "detail": state.reg_detail, "log": log_})
             elif u.path == "/api/state":
                 since = 0
                 for kv in u.query.split("&"):
@@ -856,7 +864,7 @@ def make_handler(state: UIState):
                 elif u.path == "/api/restart":
                     if state.settings is None or state.settings.on_restart is None:
                         raise RuntimeError("Restart isn't available here — close and reopen Telvoro")
-                    state.add("event", "Restarting…")
+                    state.add("system", "Restarting…")
                     threading.Timer(0.3, state.settings.on_restart).start()
                 elif u.path == "/api/call":
                     number = "".join(ch for ch in str(body.get("number", "")) if ch not in " -()")
@@ -938,7 +946,7 @@ def make_handler(state: UIState):
                 elif u.path == "/api/quit":
                     if state.on_quit is None:
                         raise RuntimeError("Quit from the terminal window (Ctrl+C)")
-                    state.add("event", "Shutting down")
+                    state.add("system", "Shutting down")
                     threading.Timer(0.3, state.on_quit).start()
                 elif u.path == "/api/phrases":
                     state.save_phrases(list(body.get("phrases", [])))

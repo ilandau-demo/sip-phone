@@ -341,7 +341,7 @@ class SettingsManager:
                 else:
                     if self.ui is not None and not self.phone.presence_only:
                         self.ui.reg_detail = "registering…"
-                        self.ui.add("event", "Account settings saved — registering again")
+                        self.ui.add("system", "Account settings saved — registering again")
                     threading.Thread(target=self._reconfigure, args=(kw,), daemon=True,
                                      name="sip-reconfigure").start()
                 applied.append("account")
@@ -350,7 +350,7 @@ class SettingsManager:
                 self.phone.set_presence_only(new_mode == "presence")
                 if self.ui is not None:
                     self.ui.mode = new_mode
-                    self.ui.add("event", "Switched to Team view only" if new_mode == "presence" else "Switched to phone mode")
+                    self.ui.add("system", "Switched to Team view only" if new_mode == "presence" else "Switched to phone mode")
                 if new_mode == "phone" and "account" not in groups:
                     if self.ui is not None:
                         self.ui.reg_detail = "registering…"
@@ -411,7 +411,7 @@ class SettingsManager:
                 log.warning("Team view disabled: %s", e)
         if self.ui is not None:
             self.ui.monitor = new
-            self.ui.add("event", (f"Team view updated ({'user login' if presence_mode(admin) == 'events' else 'Admin XSI login'})") if new else
+            self.ui.add("system", (f"Team view updated ({'user login' if presence_mode(admin) == 'events' else 'Admin XSI login'})") if new else
                         ("Team view off" if not self.monitor_error else f"Team view error: {self.monitor_error}"))
 
     # ------------------------------------------------------------------ test

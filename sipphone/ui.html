@@ -181,7 +181,7 @@
   #pd-acts { display: flex; gap: 6px; }
   #pd-acts button { font-size: 13px; padding: 6px 12px; border-radius: 8px; background: var(--line-soft); color: var(--line); font-weight: 600; }
   .toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
-  .toast { background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 10px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: 300px; animation: toastin .2s ease-out; }
+  .toast { background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: 300px; animation: toastin .2s ease-out; }
   .toast b { font-weight: 600; }
   @keyframes toastin { from { opacity: 0; transform: translateY(6px); } }
 
@@ -293,6 +293,23 @@
   .msg.event.strong { color: var(--ink); font-weight: 500; }
   .msg.dtmf { align-self: flex-end; font-size: 13px; color: var(--ink-2); padding: 2px 4px; }
   .msg.dtmf kbd { font: inherit; background: var(--bench); border-radius: 4px; padding: 1px 6px; letter-spacing: .15em; }
+  /* one block per call; finished calls fold into a one-line summary */
+  .callgrp { display: flex; flex-direction: column; gap: 6px; }
+  .callgrp > summary { list-style: none; cursor: pointer; align-self: stretch; display: flex; align-items: baseline; gap: 8px;
+    font-size: 13px; color: var(--ink-2); padding: 8px 12px; border: 1px solid var(--rule); border-radius: 10px; background: #fff; }
+  .callgrp > summary::-webkit-details-marker { display: none; }
+  .callgrp > summary::before { content: "▸"; color: var(--ink-3); font-size: 11px; }
+  .callgrp[open] > summary::before { content: "▾"; }
+  .callgrp > summary b { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .callgrp > summary .sm { margin-left: auto; white-space: nowrap; color: var(--ink-3); }
+  .callgrp.live > summary { display: none; }
+  .callgrp.done:not([open]) { gap: 0; }
+  .callgrp.done[open] { padding-bottom: 6px; border-bottom: 1px dashed var(--rule); }
+  .reglog { list-style: none; margin: 6px 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 13px; }
+  .reglog li { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--rule); }
+  .reglog li .tm { color: var(--ink-3); white-space: nowrap; min-width: 7.5em; }
+  .reglog li.bad { color: var(--hang); }
+  .reglog-now { font-size: 13px; margin-top: 6px; }
 
   .compose { border-top: 1px solid var(--rule); padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
   .phrases { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -699,6 +716,11 @@
         </div>
         <label class="s-field"><span>Local SIP port</span><input data-k="local.bind_port" inputmode="numeric"><small>Change if another phone app already uses 5060. Needs a restart.</small></label>
       </details>
+      <details id="s-reglog"><summary>Registration history</summary>
+        <div class="reglog-now" id="s-reglog-now"></div>
+        <ol class="reglog" id="s-reglog-list"></ol>
+        <small>Registration refreshes and failures are listed here only — they no longer appear in the call screen.</small>
+      </details>
     </section>
 
     <section class="s-sec">
@@ -839,8 +861,30 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     else { number.value += k; number.focus(); }
   });
   number.addEventListener('keydown', e => { if (e.key === 'Enter') doCall(); });
-  const doCall = () => { if (number.value.trim()) api('/api/call', {number: number.value}).catch(() => {}); };
+  // Call with nothing typed = redial: the last number you called (else the last call of any kind)
+  let lastDialed = null;
+  const refreshRedial = async () => {
+    try {
+      const h = await (await fetch('/api/history', {cache: 'no-store'})).json();
+      const list = Array.isArray(h) ? h : (h.history || h.calls || []);
+      const e = list.find(x => x.direction === 'out' && x.number) || list.find(x => x.number);
+      lastDialed = e ? {number: e.number, name: e.name || ''} : null;
+    } catch (e) {}
+    syncCallLabel();
+  };
+  const syncCallLabel = () => {
+    const b = $('btn-call'), empty = !number.value.trim();
+    b.textContent = empty && lastDialed ? 'Redial' : 'Call';
+    b.title = empty && lastDialed ? `Redial ${lastDialed.name ? lastDialed.name + ' · ' : ''}${lastDialed.number}` : '';
+  };
+  const doCall = () => {
+    let n = number.value.trim();
+    if (!n && lastDialed) { n = lastDialed.number; number.value = n; }
+    if (n) api('/api/call', {number: n}).catch(() => {});
+  };
   $('btn-call').onclick = doCall;
+  number.addEventListener('input', syncCallLabel);
+  refreshRedial();
   $('btn-answer').onclick = () => api('/api/answer').catch(() => {});
   $('btn-hang').onclick = () => api('/api/hangup').catch(() => {});
   $('reregister').onclick = () => api('/api/register').catch(() => {});
@@ -1987,7 +2031,48 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
 
   // ---- transcript ----
   const fmtTime = t => new Date(t * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+  // Each call gets its own block. When it ends the block folds into a one-line
+  // summary (click to reopen); only the last finished call is kept, so the
+  // screen never grows call after call. Registration refreshes, settings and
+  // availability alerts are not transcript lines (Settings / toasts instead).
+  let curGrp = null;
+  const KEEP_DONE = 1;
+  const newGroup = title => {
+    const g = document.createElement('details'); g.className = 'callgrp live'; g.open = true;
+    const sm = document.createElement('summary');
+    const b = document.createElement('b'); b.textContent = title || 'Call';
+    const meta = document.createElement('span'); meta.className = 'sm';
+    sm.append(b, meta); g.appendChild(sm);
+    g.dataset.title = title || 'Call';
+    thread.appendChild(g); curGrp = g; return g;
+  };
+  const finishGroup = (endText, t) => {
+    const g = curGrp; if (!g) return;
+    curGrp = null;
+    const lines = g.querySelectorAll('.msg.said, .msg.heard').length;
+    const dur = (endText.match(/after ([\d:]+)\s*$/) || [])[1];
+    g.querySelector('summary .sm').textContent = [fmtTime(t), dur, lines ? `${lines} message${lines === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+    g.classList.remove('live'); g.classList.add('done'); g.open = false;
+    const done = thread.querySelectorAll('.callgrp.done');
+    for (let i = 0; i < done.length - KEEP_DONE; i++) done[i].remove();
+    thread.querySelectorAll(':scope > .msg').forEach(m => m.remove());   // stray lines from before the call
+  };
+  const sysToast = text => {
+    const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
+    $('toasts').appendChild(t); setTimeout(() => t.remove(), 5000);
+  };
   const addMsg = ev => {
+    if (ev.kind === 'notify') return;                                                   // shown as toasts
+    if (ev.kind === 'system') { if (Date.now() / 1000 - ev.t < 30) sysToast(ev.text); return; }
+    if (ev.kind === 'event' && /^(Registered \(|Registration failed)/.test(ev.text)) return;  // Settings → Registration history
+    const starts = ev.kind === 'event' && /^(Incoming call from |Calling )/.test(ev.text);
+    const ends = ev.kind === 'event' && /^Call ended/.test(ev.text);
+    if (starts) {
+      if (curGrp) finishGroup('', ev.t);
+      newGroup(ev.text.replace(/^Incoming call from /, '').replace(/^Calling /, ''));
+    } else if (!curGrp && (ev.kind === 'said' || ev.kind === 'heard' || /^(Connected|Answering|Transferring|Consulting|Conferencing)/.test(ev.text))) {
+      newGroup('Call');
+    }
     const d = document.createElement('div');
     if (ev.kind === 'said') {
       d.className = 'msg said'; d.textContent = ev.text;
@@ -2002,9 +2087,28 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       d.textContent = ev.text;
     }
     const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40;
-    thread.appendChild(d);
-    if (atBottom) thread.scrollTop = thread.scrollHeight;
+    (curGrp || thread).appendChild(d);
+    if (ends) { finishGroup(ev.text, ev.t); setTimeout(refreshRedial, 500); }
+    if (atBottom || ends) thread.scrollTop = thread.scrollHeight;
   };
+
+  // Settings → Phone line → Registration history
+  const loadRegLog = async () => {
+    try {
+      const r = await (await fetch('/api/registration', {cache: 'no-store'})).json();
+      $('s-reglog-now').textContent = (r.registered ? 'Registered now' : 'Not registered') + (r.detail ? ` — ${r.detail}` : '');
+      const ol = $('s-reglog-list'); ol.innerHTML = '';
+      for (const e of r.log || []) {
+        const li = document.createElement('li'); li.className = e.ok ? '' : 'bad';
+        const tm = document.createElement('span'); tm.className = 'tm';
+        tm.textContent = new Date(e.t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+        const tx = document.createElement('span'); tx.textContent = e.ok ? `Registered (${e.detail})` : `Failed: ${e.detail}`;
+        li.append(tm, tx); ol.appendChild(li);
+      }
+      if (!(r.log || []).length) { const li = document.createElement('li'); li.textContent = 'Nothing yet since the app started.'; ol.appendChild(li); }
+    } catch (e) {}
+  };
+  $('s-reglog').addEventListener('toggle', () => { if ($('s-reglog').open) loadRegLog(); });
 
   // ---- state render ----
   const render = s => {
