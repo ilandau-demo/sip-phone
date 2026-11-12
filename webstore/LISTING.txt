@@ -1,4 +1,4 @@
-CHROME WEB STORE LISTING - Telvoro - Presence & SIP Phone, extension 2.5.0
+CHROME WEB STORE LISTING - Telvoro - Presence & SIP Phone, extension 2.5.1
 =====================================================
 (paste these into the Developer Dashboard; steps are in STEPS.txt)
 

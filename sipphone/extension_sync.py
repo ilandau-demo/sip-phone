@@ -40,7 +40,7 @@ ZIP_BASENAME = "telvoro-extension"
 SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extension")
 MARKER = "install.json"
 
-README = f"""SIP PHONE - CHROME / EDGE EXTENSION
+README = f"""TELVORO - PRESENCE & SIP PHONE - CHROME / EDGE EXTENSION
 ===================================
 
 This folder is the Telvoro browser extension. The Telvoro desktop app keeps it up

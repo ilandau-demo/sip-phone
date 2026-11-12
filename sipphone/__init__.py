@@ -12,4 +12,4 @@ phone     - the user agent: registration, calls, dialog state machine
 cli       - an interactive command line front end
 """
 
-__version__ = "2.5.0"
+__version__ = "2.5.1"

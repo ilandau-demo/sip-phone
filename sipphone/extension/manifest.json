@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Telvoro - Presence & SIP Phone",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "An independent side-panel companion designed to work with Nextiva: click-to-call, call alerts, and live team presence.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2eoTaM6Rkowya/YYluGIEy75OMIcBmuLbumTmkIN4ofIhvwjuj5iymae+G/83nLV5CflWsRDYnz3EYCvqct1REpbBsWGhuWavuRj8YmLoyWC9sDKjOgye9DKWtEdmqCC7ctrwvAHcHaa6BsdhXvz8ZzBi1bm+36w4ucN21QCdfIExqZebW8i3GoWM8gPPxO6DU4XBAp0BvdCVXFSsylrVw5lC58uuWYZYVa1O5xia7zQQlFezOetKvEgNOOcvrEXyqIqADAsf74nh1F/JO2chQ0Hg6UXqxxuPr6DhaVfEmaHoiP6XpXkP3Ry4g6nxxH5HGOwxblnQWUoN3Nf8VZpMwIDAQAB",

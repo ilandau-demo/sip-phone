@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.5.1 — 2026-11-12 — cleaner call screen, redial
+- **Cleaner call screen.** Each call is its own block; when it ends it folds
+  into a one-line summary (caller · time · duration · messages — click to
+  reopen the transcript) and only the last finished call is kept, so the
+  screen no longer grows call after call. Registration refreshes are no longer
+  written there: Settings → Phone line → *Registration history* lists them
+  (`GET /api/registration`). Settings/update notices show as short toasts, and
+  availability alerts only as toasts (they were also transcript lines). Toast
+  text was invisible (undefined colour) — fixed.
+- **Redial.** With nothing in the number field the Call button reads *Redial*
+  (tooltip shows who) and calls the last number you dialled — or, if you have
+  never dialled out, the last call of any kind.
+- READ ME FIRST and the extension's README carry the Telvoro name.
+- Extension files unchanged apart from the version number.
+
 ## 2.5.0 — 2026-11-09 — presence in under a second; renamed Telvoro - Presence & SIP Phone
 - **Renamed** to *Telvoro - Presence & SIP Phone* ("Telvoro" in running text)
   everywhere people see it: Chrome Web Store name and summary ("An independent
@@ -68,17 +83,6 @@
 - Store screenshots and promo tile redrawn with the Telvoro name; release files
   are now `Telvoro-<v>.zip`, `Telvoro-Browser-Extension-<v>.zip` and
   `webstore/telvoro-extension-<v>-webstore.zip`.
-- **Cleaner call screen.** Each call is its own block; when it ends it folds
-  into a one-line summary (caller · time · duration · messages — click to
-  reopen the transcript) and only the last finished call is kept, so the
-  screen no longer grows call after call. Registration refreshes are no longer
-  written there: Settings → Phone line → *Registration history* lists them
-  (`GET /api/registration`). Settings/update notices show as short toasts, and
-  availability alerts only as toasts (they were also transcript lines). Toast
-  text was invisible (undefined colour) — fixed.
-- **Redial.** With nothing in the number field the Call button reads *Redial*
-  (tooltip shows who) and calls the last number you dialled — or, if you have
-  never dialled out, the last call of any kind.
 - Example config cleaned of the retired BLF options.
 - Extension files unchanged — the store package is a version bump only.
 

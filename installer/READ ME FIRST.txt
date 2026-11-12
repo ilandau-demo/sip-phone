@@ -1,4 +1,4 @@
-SIP PHONE  -  version 2.5.0
+TELVORO - PRESENCE & SIP PHONE  -  version 2.5.1
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
