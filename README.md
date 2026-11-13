@@ -81,6 +81,12 @@ footer shows "updates in 0.4 s (p95; platform 0.3 s)" and
 `/api/presence/health` carries `latency` (platform / engine / ack_rtt /
 render) and `channels`. If the stream drops the page polls until it is back.
 
+**Several accounts (2.6.0).** Up to 8 SIP accounts at once: Settings → *More
+phone lines* (lines 2–8, `[line2]` … `[line8]`), each registering on its own.
+Pick the line to dial from in the header. One call has the audio; answering or
+calling on another line holds the others, and calls ringing or held on other
+lines show in a strip with their own buttons.
+
 **Services** (hunt groups, call centers, auto attendants…) appear as click-to-call
 entries under their kind, with a filter chip per kind on the Team tab. Settings →
 Team view → *Service display names* gives any service a friendly name instead of

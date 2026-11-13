@@ -62,6 +62,10 @@
   .reg b { font-weight: 600; color: var(--ink); }
   .top .ghost { color: var(--ink-2); padding: 6px 10px; border-radius: 6px; }
   .top .ghost:hover { background: rgba(0,0,0,.05); }
+  .top { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+  .top .ghost { white-space: nowrap; }
+  .reg { min-width: 0; }
+  @media (max-width: 480px) { .top { gap: 6px; } .top .gl { display: none; } #linepick { max-width: 150px; } .top h1 #ver { display: none; } }
 
   /* ---- dialer ---- */
   .dialer { background: var(--panel); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
@@ -293,6 +297,29 @@
   .msg.event.strong { color: var(--ink); font-weight: 500; }
   .msg.dtmf { align-self: flex-end; font-size: 13px; color: var(--ink-2); padding: 2px 4px; }
   .msg.dtmf kbd { font: inherit; background: var(--bench); border-radius: 4px; padding: 1px 6px; letter-spacing: .15em; }
+  /* several accounts */
+  #linepick { font: inherit; font-weight: 600; color: var(--ink); background: transparent; border: 1px solid var(--rule);
+    border-radius: 8px; padding: 2px 4px; max-width: 170px; margin-right: 4px; }
+  .otherlines { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .ol-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 10px;
+    font-size: 13px; background: #fff; }
+  .ol-row.ringing { border-color: var(--line); background: var(--line-soft); animation: olpulse 1.2s ease-in-out infinite; }
+  @keyframes olpulse { 50% { box-shadow: 0 0 0 3px var(--line-soft); } }
+  .ol-row .ol-line { font-weight: 600; white-space: nowrap; }
+  .ol-row .ol-who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+  .ol-row .ol-st { color: var(--ink-3); white-space: nowrap; }
+  .ol-row button { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+  .ol-row button.ans { background: var(--line); color: #fff; border: 0; }
+  .ol-row button.end { background: transparent; color: var(--hang); border: 1px solid var(--hang); }
+  .s-line { border: 1px solid var(--rule); border-radius: 10px; padding: 6px 10px; margin: 6px 0; }
+  .s-line > summary { cursor: pointer; display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .s-line .ln-title { font-weight: 600; }
+  .s-line .ln-sub { color: var(--ink-3); font-size: 12px; margin-left: auto; }
+  .s-line .ln-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rule); flex: none; }
+  .s-line.on .ln-dot { background: var(--line); }
+  .s-line.bad .ln-dot { background: var(--hang); }
+  .s-line[open] { padding-bottom: 10px; }
+  .callstate .ln { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--line); }
   /* one block per call; finished calls fold into a one-line summary */
   .callgrp { display: flex; flex-direction: column; gap: 6px; }
   .callgrp > summary { list-style: none; cursor: pointer; align-self: stretch; display: flex; align-items: baseline; gap: 8px;
@@ -485,8 +512,8 @@
 <div class="app">
   <header class="top">
     <h1 title="Telvoro - Presence & SIP Phone">Telvoro <span id="ver" style="font-size:11px;font-weight:400;color:var(--ink-3)"></span></h1>
-    <div class="reg" id="reg"><span class="dot"></span><span id="regtext">Connecting…</span></div>
-    <button class="ghost" id="reregister" title="Register again now">Re-register</button>
+    <div class="reg" id="reg"><span class="dot"></span><select id="linepick" aria-label="Account to use" hidden></select><span id="regtext">Connecting…</span></div>
+    <button class="ghost" id="reregister" title="Register this account again now" aria-label="Re-register">↻<span class="gl"> Re-register</span></button>
     <button class="ghost gear" id="btn-settings" title="Settings: your SIP account, Team view, voice and audio" aria-label="Settings" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span class="gl">Settings</span></button>
     <button class="ghost" id="quit" title="Stop the phone and close" hidden>Quit</button>
   </header>
@@ -501,6 +528,7 @@
       <button data-k="7">7<small>PQRS</small></button><button data-k="8">8<small>TUV</small></button><button data-k="9">9<small>WXYZ</small></button>
       <button data-k="*">*</button><button data-k="0">0<small>+</small></button><button data-k="#">#</button>
     </div>
+      <div class="otherlines" id="otherlines" hidden></div>
     <div class="callstate" id="callstate"><span class="what">No call</span></div>
     <div class="actions" id="actions">
       <button class="call wide" id="btn-call">Call</button>
@@ -704,6 +732,7 @@
     <section class="s-sec" data-app="phone">
       <h3 id="s-line-title">Phone line</h3>
       <p id="s-line-hint">From your phone system’s admin portal: the user’s SIP device credentials.</p>
+      <label class="s-field"><span>Line name</span><input data-k="account.label" placeholder="e.g. Front desk — shown in the account list"></label>
       <label class="s-field"><span>Display name</span><input data-k="account.display_name" placeholder="Shown at the top and to people you call"></label>
       <label class="s-field"><span>SIP Username</span><input data-k="account.username" required spellcheck="false"></label>
       <label class="s-field"><span>Authentication Name</span><input data-k="account.auth_username" spellcheck="false"><small>Leave blank if it's the same as the SIP Username.</small></label>
@@ -715,6 +744,122 @@
           <label class="s-field"><span>Port</span><input data-k="account.proxy_port" inputmode="numeric"></label>
         </div>
         <label class="s-field"><span>Local SIP port</span><input data-k="local.bind_port" inputmode="numeric"><small>Change if another phone app already uses 5060. Needs a restart.</small></label>
+      </details>
+    </section>
+    <section class="s-sec" data-app="phone" id="s-lines">
+      <h3>More phone lines</h3>
+      <p>Up to 8 SIP accounts at once. Each line registers on its own; one call has your microphone at a time — answering or calling on another line puts the others on hold. Choose the line to dial from in the header.</p>
+      <details class="s-line" data-line="2"><summary><span class="ln-dot"></span><span class="ln-title">Line 2</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line2.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line2.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line2.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line2.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line2.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line2.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line2.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line2.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line2.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line2.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="2">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="3"><summary><span class="ln-dot"></span><span class="ln-title">Line 3</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line3.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line3.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line3.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line3.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line3.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line3.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line3.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line3.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line3.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line3.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="3">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="4"><summary><span class="ln-dot"></span><span class="ln-title">Line 4</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line4.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line4.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line4.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line4.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line4.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line4.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line4.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line4.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line4.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line4.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="4">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="5"><summary><span class="ln-dot"></span><span class="ln-title">Line 5</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line5.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line5.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line5.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line5.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line5.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line5.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line5.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line5.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line5.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line5.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="5">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="6"><summary><span class="ln-dot"></span><span class="ln-title">Line 6</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line6.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line6.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line6.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line6.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line6.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line6.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line6.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line6.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line6.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line6.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="6">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="7"><summary><span class="ln-dot"></span><span class="ln-title">Line 7</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line7.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line7.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line7.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line7.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line7.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line7.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line7.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line7.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line7.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line7.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="7">Remove this line</button>
+      </details>
+      <details class="s-line" data-line="8"><summary><span class="ln-dot"></span><span class="ln-title">Line 8</span><span class="ln-sub">not set up</span></summary>
+        <label class="check"><input type="checkbox" data-k="line8.enabled"><span>Use this line</span></label>
+        <label class="s-field"><span>Line name</span><input data-k="line8.label" placeholder="e.g. Sales demo"></label>
+        <label class="s-field"><span>Display name</span><input data-k="line8.display_name" placeholder="Shown to people you call"></label>
+        <div class="s-two">
+          <label class="s-field"><span>SIP Username</span><input data-k="line8.username" spellcheck="false"></label>
+          <label class="s-field"><span>Authentication Name</span><input data-k="line8.auth_username" spellcheck="false" placeholder="Same as username"></label>
+        </div>
+        <label class="s-field"><span>Password</span><input data-k="line8.password" type="password" autocomplete="new-password" spellcheck="false"><small data-hint="line8.password"></small></label>
+        <div class="s-two">
+          <label class="s-field"><span>Domain</span><input data-k="line8.domain" spellcheck="false" placeholder="Same as line 1"></label>
+          <label class="s-field"><span>Outbound proxy</span><input data-k="line8.proxy" spellcheck="false" placeholder="Same as domain"></label>
+        </div>
+        <label class="s-field"><span>Proxy port</span><input data-k="line8.proxy_port" inputmode="numeric"></label>
+        <button type="button" class="link ln-clear" data-clear="8">Remove this line</button>
       </details>
       <details id="s-reglog"><summary>Registration history</summary>
         <div class="reglog-now" id="s-reglog-now"></div>
@@ -868,26 +1013,40 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const h = await (await fetch('/api/history', {cache: 'no-store'})).json();
       const list = Array.isArray(h) ? h : (h.history || h.calls || []);
       const e = list.find(x => x.direction === 'out' && x.number) || list.find(x => x.number);
-      lastDialed = e ? {number: e.number, name: e.name || ''} : null;
+      lastDialed = e ? {number: e.number, name: e.name || '', line: e.line || 0, line_label: e.line_label || ''} : null;
     } catch (e) {}
     syncCallLabel();
   };
   const syncCallLabel = () => {
     const b = $('btn-call'), empty = !number.value.trim();
     b.textContent = empty && lastDialed ? 'Redial' : 'Call';
-    b.title = empty && lastDialed ? `Redial ${lastDialed.name ? lastDialed.name + ' · ' : ''}${lastDialed.number}` : '';
+    b.title = empty && lastDialed ? `Redial ${lastDialed.name ? lastDialed.name + ' · ' : ''}${lastDialed.number}${lastDialed.line_label && (lastState && (lastState.lines || []).length > 1) ? ' on ' + lastDialed.line_label : ''}` : '';
   };
   const doCall = () => {
-    let n = number.value.trim();
-    if (!n && lastDialed) { n = lastDialed.number; number.value = n; }
-    if (n) api('/api/call', {number: n}).catch(() => {});
+    let n = number.value.trim(), body = null;
+    if (!n && lastDialed) {
+      n = lastDialed.number; number.value = n; body = {number: n};
+      if (lastDialed.line && (lastState && (lastState.lines || []).some(l => l.n === lastDialed.line))) body.line = lastDialed.line;
+    }
+    if (n) api('/api/call', body || {number: n}).catch(() => {});
   };
   $('btn-call').onclick = doCall;
   number.addEventListener('input', syncCallLabel);
   refreshRedial();
   $('btn-answer').onclick = () => api('/api/answer').catch(() => {});
   $('btn-hang').onclick = () => api('/api/hangup').catch(() => {});
-  $('reregister').onclick = () => api('/api/register').catch(() => {});
+  // Re-register: a clean start for the chosen account (fresh DNS, address, auth), with the answer shown
+  $('reregister').onclick = async () => {
+    const b = $('reregister'); if (b.disabled) return;
+    b.disabled = true; const was = b.innerHTML; b.textContent = '↻ Registering…';
+    try {
+      const r = await (await fetch('/api/register', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({line: lastState && lastState.current_line || 1})})).json();
+      const who = (lastState && (lastState.lines || []).find(l => l.current) || {}).label || (lastState && lastState.display_name) || 'Line';
+      sysToast(r.error ? 'Re-register failed: ' + r.error : r.ok ? `${who} registered (${r.detail})` : `${who} didn’t register: ${r.detail}`);
+    } catch (e) { sysToast('Re-register failed — is Telvoro running?'); }
+    finally { b.disabled = false; b.innerHTML = was; }
+  };
   $('quit').onclick = () => { if (!inCall() || confirm('A call is active. Hang up and quit?')) api('/api/quit').then(() => { document.title = 'Telvoro stopped'; }).catch(() => {}); };
   $('btn-hold').onclick = () => api('/api/hold').catch(() => {});
   $('btn-mute').onclick = () => api('/api/mute').catch(() => {});
@@ -1077,12 +1236,14 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const meta = document.createElement('div'); meta.className = 'meta';
       const what = {answered: h.duration ? `${Math.floor(h.duration / 60)}:${String(h.duration % 60).padStart(2, '0')}` : 'answered',
                     missed: 'Missed', declined: 'Declined', cancelled: 'Cancelled', failed: h.reason || 'Failed'}[h.outcome] || h.outcome;
-      meta.textContent = `${fmtDay(h.t)} · ${what}` + (h.name ? ` · ${h.number}` : '');
+      const multi = lastState && (lastState.lines || []).length > 1;
+      meta.textContent = `${fmtDay(h.t)} · ${what}` + (h.name ? ` · ${h.number}` : '') + (multi && h.line_label ? ` · ${h.line_label}` : '');
       info.append(nm, meta);
       const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
       dial.title = 'Call ' + (h.name || h.number); dial.setAttribute('aria-label', 'Call back ' + h.number);
       dial.disabled = !registered || inCall();
-      dial.onclick = () => { number.value = h.number; api('/api/call', {number: h.number}).catch(() => {}); };
+      // call back on the line the call was on
+      dial.onclick = () => { number.value = h.number; api('/api/call', multi && h.line ? {number: h.number, line: h.line} : {number: h.number}).catch(() => {}); };
       row.append(ar, info, dial);
       box.appendChild(row);
     }
@@ -1888,10 +2049,32 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const openSettings = async () => {
     sMsg('');
     try { await loadSettings(); } catch (e) { showErr('Settings unavailable: ' + e.message); return; }
+    renderLineSlots();
     if (!sdlg.open) sdlg.showModal();
     const first = sData.needs_setup && sData.mode !== 'presence' ? sdlg.querySelector('[data-k="account.username"]') : $('s-close');
     if (sData.needs_setup && first.value === '1234567890') first.select(); else first.focus();
   };
+  const renderLineSlots = st => {
+    const ls = ((st || lastState) && (st || lastState).lines) || [];
+    sdlg.querySelectorAll('.s-line').forEach(d => {
+      const n = +d.dataset.line, v = (sData && sData.values && sData.values['line' + n]) || {};
+      const live = ls.find(l => l.n === n);
+      const setUp = !!v.username;
+      d.querySelector('.ln-title').textContent = v.label ? `Line ${n} · ${v.label}` : `Line ${n}`;
+      d.querySelector('.ln-sub').textContent = !setUp ? 'not set up' : v.enabled === 'false' ? 'off'
+        : live ? (live.registered ? 'registered' : 'not registered') : 'saved';
+      d.classList.toggle('on', !!(live && live.registered)); d.classList.toggle('bad', !!(setUp && live && !live.registered));
+      const en = d.querySelector(`[data-k="line${n}.enabled"]`); if (!setUp && en && !en.dataset.touched) en.checked = true;
+    });
+  };
+  sdlg.querySelectorAll('.s-line [data-k$=".enabled"]').forEach(el => el.addEventListener('change', () => { el.dataset.touched = '1'; }));
+  sdlg.querySelectorAll('.ln-clear').forEach(b => b.onclick = () => {
+    const n = b.dataset.clear;
+    if (!confirm(`Remove line ${n}? Its account details are cleared when you Save.`)) return;
+    for (const k of ['label', 'display_name', 'username', 'auth_username', 'domain', 'proxy']) { const el = sdlg.querySelector(`[data-k="line${n}.${k}"]`); if (el) el.value = ''; }
+    const en = sdlg.querySelector(`[data-k="line${n}.enabled"]`); if (en) en.checked = false;
+    sMsg(`Line ${n} will be removed when you Save.`);
+  });
   $('btn-settings').onclick = openSettings;
   $('s-close').onclick = $('s-cancel').onclick = () => sdlg.close();
   $('s-save').onclick = async () => {
@@ -1908,9 +2091,13 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       if (j.applied.includes('mode')) bits.push(collect().app.mode === 'presence' ? 'Now Team view only.' : 'Phone mode on.');
       if (j.applied.includes('team')) bits.push(j.monitor_error ? 'Team view error: ' + j.monitor_error : 'Team view updated.');
       if (j.applied.includes('startup')) bits.push('Startup setting saved.');
-      sMsg(bits.join(' '), j.monitor_error ? 'bad' : 'ok');
-      for (const k of ['account.password', 'admin.password', 'presence.xsi_password']) sdlg.querySelector(`[data-k="${k}"]`).value = '';
+      if (j.applied.includes('lines')) bits.push('Lines updated — registering.');
+      // refresh the form first, then say "Saved" — so a field edited right after the
+      // message is never wiped by the refresh
+      for (const k of ['account.password', 'admin.password', 'presence.xsi_password', ...[2,3,4,5,6,7,8].map(n => `line${n}.password`)]) { const el = sdlg.querySelector(`[data-k="${k}"]`); if (el) el.value = ''; }
       await loadSettings();
+      renderLineSlots();
+      sMsg(bits.join(' '), j.monitor_error ? 'bad' : 'ok');
       showRestart(j.restart_required);
       if (j.applied.includes('team')) { teamDefaulted = false; }
     } catch (e) { sMsg('Couldn’t save: ' + e.message, 'bad'); }
@@ -2048,11 +2235,12 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   };
   const finishGroup = (endText, t) => {
     const g = curGrp; if (!g) return;
-    curGrp = null;
+    curGrp = thread.querySelector('.callgrp.live:not([data-call="' + (g.dataset.call || '') + '"])') || null;
     const lines = g.querySelectorAll('.msg.said, .msg.heard').length;
     const dur = (endText.match(/after ([\d:]+)\s*$/) || [])[1];
     g.querySelector('summary .sm').textContent = [fmtTime(t), dur, lines ? `${lines} message${lines === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
     g.classList.remove('live'); g.classList.add('done'); g.open = false;
+    thread.appendChild(g);                               // finished order = screen order: the newest stays
     const done = thread.querySelectorAll('.callgrp.done');
     for (let i = 0; i < done.length - KEEP_DONE; i++) done[i].remove();
     thread.querySelectorAll(':scope > .msg').forEach(m => m.remove());   // stray lines from before the call
@@ -2067,7 +2255,15 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     if (ev.kind === 'event' && /^(Registered \(|Registration failed)/.test(ev.text)) return;  // Settings → Registration history
     const starts = ev.kind === 'event' && /^(Incoming call from |Calling )/.test(ev.text);
     const ends = ev.kind === 'event' && /^Call ended/.test(ev.text);
-    if (starts) {
+    // with call ids (2.6+), each call keeps its own block even while another line rings
+    if (ev.call) {
+      let g = thread.querySelector(`.callgrp[data-call="${CSS.escape(ev.call)}"]`);
+      if (!g) {
+        const title = starts ? ev.text.replace(/^Incoming call from /, '').replace(/^Calling /, '') : 'Call';
+        g = newGroup((ev.line ? ev.line + ' · ' : '') + title); g.dataset.call = ev.call;
+      }
+      curGrp = g;
+    } else if (starts) {
       if (curGrp) finishGroup('', ev.t);
       newGroup(ev.text.replace(/^Incoming call from /, '').replace(/^Calling /, ''));
     } else if (!curGrp && (ev.kind === 'said' || ev.kind === 'heard' || /^(Connected|Answering|Transferring|Consulting|Conferencing)/.test(ev.text))) {
@@ -2096,13 +2292,16 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const loadRegLog = async () => {
     try {
       const r = await (await fetch('/api/registration', {cache: 'no-store'})).json();
-      $('s-reglog-now').textContent = (r.registered ? 'Registered now' : 'Not registered') + (r.detail ? ` — ${r.detail}` : '');
+      const ls = (lastState && lastState.lines) || [];
+      $('s-reglog-now').textContent = ls.length > 1
+        ? ls.map(l => `${l.label}: ${l.registered ? 'registered' : 'not registered — ' + (l.detail || '')}`).join(' · ')
+        : (r.registered ? 'Registered now' : 'Not registered') + (r.detail ? ` — ${r.detail}` : '');
       const ol = $('s-reglog-list'); ol.innerHTML = '';
       for (const e of r.log || []) {
         const li = document.createElement('li'); li.className = e.ok ? '' : 'bad';
         const tm = document.createElement('span'); tm.className = 'tm';
         tm.textContent = new Date(e.t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-        const tx = document.createElement('span'); tx.textContent = e.ok ? `Registered (${e.detail})` : `Failed: ${e.detail}`;
+        const tx = document.createElement('span'); tx.textContent = (e.line ? e.line + ': ' : '') + (e.ok ? `Registered (${e.detail})` : `Failed: ${e.detail}`);
         li.append(tm, tx); ol.appendChild(li);
       }
       if (!(r.log || []).length) { const li = document.createElement('li'); li.textContent = 'Nothing yet since the app started.'; ol.appendChild(li); }
@@ -2111,6 +2310,62 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   $('s-reglog').addEventListener('toggle', () => { if ($('s-reglog').open) loadRegLog(); });
 
   // ---- state render ----
+  // ---- several accounts: header picker, calls on other lines ----
+  let linePickSig = '';
+  const renderLinePick = s => {
+    const ls = s.lines || [], pick = $('linepick');
+    const multi = ls.length > 1 && !presenceMode;
+    pick.hidden = !multi;
+    if (!multi) return;
+    const sig = JSON.stringify(ls.map(l => [l.n, l.label, l.registered, l.busy, l.current]));
+    if (sig !== linePickSig && document.activeElement !== pick) {
+      linePickSig = sig; pick.innerHTML = '';
+      for (const l of ls) {
+        const o = document.createElement('option'); o.value = l.n;
+        o.textContent = `${l.registered ? '●' : '○'} ${l.label}${l.busy ? ' · on a call' : ''}`;
+        o.title = `${l.account} — ${l.registered ? 'registered' : 'not registered: ' + (l.detail || '')}`;
+        pick.appendChild(o);
+      }
+    }
+    if (document.activeElement !== pick) pick.value = String(s.current_line || 1);
+    const regd = ls.filter(l => l.registered).length;
+    // the picker names the account; the dot and a short note say how it's doing
+    $('regtext').textContent = s.registered ? (regd < ls.length ? `${regd}/${ls.length} lines` : '') : 'not registered';
+    $('regtext').title = `${regd} of ${ls.length} lines registered` + (s.registered ? '' : ` — ${s.reg_detail || ''}`);
+    $('regtext').dataset.lines = `${regd}/${ls.length}`;
+  };
+  $('linepick').onchange = async () => {
+    try { await api('/api/lines/select', {n: +$('linepick').value}); } catch (e) {}
+    linePickSig = '';
+    refreshRedial();
+  };
+  let otherSig = '';
+  const renderOtherLines = list => {
+    const box = $('otherlines');
+    const sig = JSON.stringify(list.map(c => [c.id, c.state, c.local_hold, c.elapsed.slice(0, -1)]));
+    if (sig === otherSig) return; otherSig = sig;
+    box.innerHTML = ''; box.hidden = !list.length;
+    for (const c of list) {
+      const row = document.createElement('div'); row.className = 'ol-row' + (c.state === 'incoming' ? ' ringing' : '');
+      const ln = document.createElement('span'); ln.className = 'ol-line'; ln.textContent = c.line || 'Line';
+      const who = document.createElement('span'); who.className = 'ol-who'; who.textContent = idNum(c.name, c.number) || c.number;
+      const st = document.createElement('span'); st.className = 'ol-st';
+      st.textContent = c.state === 'incoming' ? 'Ringing' : c.state === 'calling' ? 'Calling…' : c.local_hold ? 'On hold · ' + c.elapsed : 'Connected · ' + c.elapsed;
+      row.append(ln, who, st);
+      const btn = (t, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.className = cls; b.onclick = fn; row.appendChild(b); };
+      if (c.state === 'incoming') {
+        btn('Answer', 'ans', () => api('/api/answer', {call_id: c.id}).catch(() => {}));
+        btn('Decline', 'end', () => api('/api/reject', {call_id: c.id}).catch(() => {}));
+      } else if (c.state === 'connected') {
+        btn(c.local_hold ? 'Resume' : 'Hold', '', () => api('/api/hold', {call_id: c.id}).catch(() => {}));
+        btn('Hang up', 'end', () => api('/api/hangup', {call_id: c.id}).catch(() => {}));
+      } else {
+        btn('Cancel', 'end', () => api('/api/hangup', {call_id: c.id}).catch(() => {}));
+      }
+      box.appendChild(row);
+    }
+  };
+  let awaitingRecheck = 0;
   const render = s => {
     registered = s.registered; call = s.call; tts = s.tts;
     presenceMode = s.mode === 'presence';
@@ -2130,6 +2385,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const rd = $('regtext').querySelector('span'); if (rd) rd.textContent = s.reg_detail;
     $('regtext').querySelector('b').textContent = idLabel;
     if (s.display_name) $('regtext').title = s.account;
+    renderLinePick(s);
+    if (sdlg.open && s.lines) renderLineSlots(s);
 
     const cs = $('callstate');
     if (!call) { cs.className = 'callstate'; cs.innerHTML = '<span class="what">No call</span>'; }
@@ -2139,13 +2396,15 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
                     connected: (call.transferring ? 'Transferring · ' : call.local_hold ? 'On hold · ' : call.hold ? 'Held by caller · ' : 'Connected · ') + call.elapsed,
                     ended: 'Ended'}[call.state];
       cs.className = 'callstate ' + (call.state === 'incoming' ? 'ringing' : call.state === 'connected' ? 'live' : '');
-      cs.innerHTML = `<span class="who"></span><span class="what"></span>`;
+      cs.innerHTML = `<span class="ln"></span><span class="who"></span><span class="what"></span>`;
+      cs.querySelector('.ln').textContent = call.line || '';
       cs.querySelector('.who').textContent = who; cs.querySelector('.what').textContent = what;
     }
     const live = inCall();
     const wasLive = $('btn-call').hidden, wasReg = !$('btn-call').disabled;
     if (wasLive !== live || wasReg !== s.registered) setTimeout(() => { renderContacts(); if (!$('recent').hidden) loadRecent(); }, 0);
     $('incall').hidden = !connected();
+    renderOtherLines(s.other_calls || []);
     const consult = call && call.consult;
     $('consultbar').hidden = !consult;
     if (consult) {
@@ -2161,10 +2420,15 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     $('btn-hold').className = call && call.local_hold ? 'on' : ''; $('btn-hold').textContent = call && call.local_hold ? 'Resume' : 'Hold';
     $('btn-mute').className = call && call.muted ? 'on' : ''; $('btn-mute').textContent = call && call.muted ? 'Unmute' : 'Mute';
     $('btn-transfer').disabled = !!(call && call.transferring);
-    if (call && call.state === 'incoming') startRing(); else stopRing();
+    if ((call && call.state === 'incoming') || (s.other_calls || []).some(c => c.state === 'incoming')) startRing(); else stopRing();
     $('listening').hidden = !s.stt;
     $('quit').hidden = !s.can_quit;
     $('btn-settings').hidden = !s.has_settings;
+    // with pushed updates the answer can arrive inside the 0.8 s settle time and no
+    // further update follows — look again once it has passed
+    if (awaitingReg && Date.now() - awaitingReg <= 800 && !awaitingRecheck) {
+      awaitingRecheck = setTimeout(() => { awaitingRecheck = 0; if (lastState) render(lastState); }, 850);
+    }
     if (awaitingReg && Date.now() - awaitingReg > 800 && !/^(registering|unregistered)/.test(s.reg_detail)) {
       awaitingReg = 0;
       if (sdlg.open) sMsg(s.registered ? 'Saved. Registered as ' + (s.display_name || s.account) + '.'

@@ -1,4 +1,4 @@
-TELVORO - PRESENCE & SIP PHONE  -  version 2.5.1
+TELVORO - PRESENCE & SIP PHONE  -  version 2.6.0
 ==========================
 
 A softphone for Windows that registers to Nextiva (BroadWorks) as a "Generic SIP
@@ -228,6 +228,16 @@ TROUBLESHOOTING
   See every SIP message (for support)
       PowerShell:  python -m sipphone --debug
 
+
+MORE THAN ONE ACCOUNT
+  Up to 8 SIP accounts at once: Settings > More phone lines (one box per line,
+  same details as the Phone line). Choose the account to call from with the
+  drop-down next to the dot at the top. One call has your microphone at a time:
+  answering or calling on another line puts the others on hold; calls ringing
+  or held on other lines show above the call with their own buttons.
+  Re-register (the round arrow) registers the chosen account again from scratch
+  and says whether it worked. Settings > More phone lines > Registration
+  history lists every registration and failure.
 
 IF THE APP WON'T OPEN / "127.0.0.1 didn't send any data"
   Run in PowerShell:   python -m sipphone --diagnose

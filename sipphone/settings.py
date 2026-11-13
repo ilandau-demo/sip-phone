@@ -60,11 +60,22 @@ FIELDS = [
     ("app", "start_with_windows", "startup", "bool"),
     ("app", "debug", "restart", "bool"),
     ("extension", "store_id", "bridge", "str"),
+    ("account", "label", "line1", "str"),
 ]
+# Lines 2–8: [line2] … [line8], same account keys plus a label and an on/off switch
+for _n in range(2, 9):
+    FIELDS += [(f"line{_n}", "enabled", f"line{_n}", "bool"), (f"line{_n}", "label", f"line{_n}", "str"),
+               (f"line{_n}", "display_name", f"line{_n}", "str"), (f"line{_n}", "username", f"line{_n}", "str"),
+               (f"line{_n}", "auth_username", f"line{_n}", "str"), (f"line{_n}", "password", f"line{_n}", "secret"),
+               (f"line{_n}", "domain", f"line{_n}", "str"), (f"line{_n}", "proxy", f"line{_n}", "str"),
+               (f"line{_n}", "proxy_port", f"line{_n}", "port")]
 DEFAULTS = {("app", "mode"): "phone", ("app", "debug"): "false", ("update", "auto"): "false", ("app", "start_with_windows"): "false",
             ("account", "proxy_port"): "5060", ("local", "bind_port"): "5060",
             ("admin", "xsi_host"): "https://xsi.nextiva.com", ("admin", "users_only"): "true",
             ("admin", "poll_seconds"): "5", ("admin", "pickup_code"): "*97"}
+for _n in range(2, 9):
+    DEFAULTS[(f"line{_n}", "proxy_port")] = "5060"
+    DEFAULTS[(f"line{_n}", "enabled")] = "true"
 TTS_ENGINES = ("", "piper", "espeak", "openai", "elevenlabs")
 STT_ENGINES = ("", "whisper", "vosk")
 LABELS = {
@@ -87,6 +98,9 @@ class SettingsError(ValueError):
 
 
 def _label(sec: str, key: str) -> str:
+    if sec.startswith("line") and sec[4:].isdigit():
+        base = LABELS.get(("account", key), key.replace("_", " ").capitalize())
+        return f"Line {sec[4:]}: {base}"
     return LABELS.get((sec, key), key.replace("_", " ").capitalize())
 
 
@@ -271,6 +285,8 @@ class SettingsManager:
                     v = "0"
                 if not v.isdigit() or int(v) > 8:
                     raise SettingsError(f"{name} must be a number from 0 (automatic) to 8")
+                if int(v) == 0 and current[sec][key] in ("", "0"):
+                    continue                       # blank and 0 both mean automatic: not a change
             prob = config_store.check_value(v)
             if prob:
                 raise SettingsError(f"{name} {prob}")
@@ -289,6 +305,16 @@ class SettingsManager:
             raise SettingsError("Domain is required")
         if acct["domain"] and (" " in acct["domain"] or "/" in acct["domain"]):
             raise SettingsError("Domain should be a host name like nextiva.com")
+        for n in range(2, 9):
+            ln = merged.get(f"line{n}", {})
+            if ln.get("enabled", "true") != "true" or not ln.get("username"):
+                continue
+            if not (ln.get("domain") or acct["domain"]):
+                raise SettingsError(f"Line {n}: Domain is required")
+            if " " in ln.get("domain", "") or "/" in ln.get("domain", ""):
+                raise SettingsError(f"Line {n}: Domain should be a host name like nextiva.com")
+            if not (changes.get(f"line{n}", {}).get("password") or self._raw(cp, f"line{n}", "password")):
+                raise SettingsError(f"Line {n}: enter the SIP password")
         feats = _features(os.path.dirname(os.path.abspath(self.path)), self._raw(cp, "tts", "model"))
         if changes.get("tts", {}).get("engine") == "piper" and not feats["piper"]:
             raise SettingsError("Piper isn't installed. Re-run the installer and answer Y to text-to-speech.")
@@ -337,7 +363,7 @@ class SettingsManager:
                                                    "display_name", "proxy", "proxy_port")}
                 only_name = set(changes.get("account", {})) == {"display_name"}
                 if only_name:
-                    self.phone.cfg.display_name = cfg.display_name
+                    getattr(self.phone, "primary", self.phone).cfg.display_name = cfg.display_name
                 else:
                     if self.ui is not None and not self.phone.presence_only:
                         self.ui.reg_detail = "registering…"
@@ -345,6 +371,22 @@ class SettingsManager:
                     threading.Thread(target=self._reconfigure, args=(kw,), daemon=True,
                                      name="sip-reconfigure").start()
                 applied.append("account")
+            if "line1" in groups and hasattr(self.phone, "lines"):
+                self.phone.lines[1].label = changes["account"]["label"] or "Line 1"
+                applied.append("line1")
+            line_groups = sorted(int(g[4:]) for g in groups if g.startswith("line") and g[4:].isdigit() and g != "line1")
+            if line_groups and hasattr(self.phone, "set_line"):
+                from .lines import line_configs
+                confs = line_configs(config_store.read(self.path), cfg)
+                for n in line_groups:
+                    c = confs.get(n)
+                    try:
+                        self.phone.set_line(n, c[0] if c else None, c[1] if c else "")
+                    except Exception as e:
+                        raise SettingsError(f"Line {n}: {e}")
+                    if self.ui is not None:
+                        self.ui.add("system", f"Line {n} {'saved — registering' if c else 'turned off'}")
+                applied.append("lines")
             if "mode" in groups:
                 new_mode = changes["app"]["mode"]
                 self.phone.set_presence_only(new_mode == "presence")

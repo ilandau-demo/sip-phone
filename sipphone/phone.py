@@ -193,10 +193,11 @@ class AudioRouter:
 
 
 class SIPPhone:
-    def __init__(self, cfg: Config, audio=None) -> None:
+    def __init__(self, cfg: Config, audio=None, router: Optional["AudioRouter"] = None) -> None:
         self.cfg = cfg
         self.audio = audio
-        self.router = AudioRouter(audio) if audio else None
+        # several lines share one router (one mic/speaker); a single line makes its own
+        self.router = router or (AudioRouter(audio) if audio else None)
         self._audio_started = False
         self.transport = UDPTransport(cfg.bind_ip, cfg.bind_port, self._on_message)
         self.resolve_error = ""
@@ -213,6 +214,9 @@ class SIPPhone:
         self.register_call_id = f"{uuid.uuid4()}@{self.local_ip}"
         self.register_cseq = 0
         self.register_tag = rand_token(10)
+        self.reg_detail = "not registered yet"
+        self._reg_retry_at = 0.0            # when to try again after a failed registration
+        self._reg_backoff = 0.0
         self.calls: Dict[str, Call] = {}
         # Team-view-only mode: the line is never registered and calls are refused.
         self.presence_only = False
@@ -432,6 +436,38 @@ class SIPPhone:
     def unregister(self, wait: bool = False) -> None:
         self.register(0, wait=wait, timeout=3)
 
+    def reregister(self, timeout: float = 10.0) -> Tuple[bool, str]:
+        """Register again from a clean slate and wait for the answer.
+
+        Re-resolves the server, forgets the learned NAT address and any cached
+        Digest challenge, and starts a fresh REGISTER dialog — so a network
+        change, laptop sleep or a stale nonce doesn't leave the line stuck.
+        Returns (registered, detail)."""
+        if self.presence_only:
+            return False, "Team view only"
+        with self._lock:
+            self._auth_cache.clear()
+            self._nc.clear()
+            try:
+                self.proxy_addr = self._resolve(self.cfg.proxy, self.cfg.proxy_port)
+                self.resolve_error = ""
+            except RuntimeError as e:
+                self.resolve_error = str(e)
+            self.local_ip = self.cfg.public_ip or local_ip_towards(self.proxy_addr[0], self.proxy_addr[1])
+            self.local_port = self.transport.port
+            self.register_call_id = f"{uuid.uuid4()}@{self.local_ip}"
+            self.register_tag = rand_token(10)
+            self.register_cseq = 0
+            self._reg_backoff, self._reg_retry_at = 0.0, 0.0
+        if self.resolve_error:
+            self._set_registered(False, self.resolve_error)
+            return False, self.resolve_error
+        self.reg_detail = "registering…"
+        ok = self.register(wait=True, timeout=timeout)
+        if not ok and self.reg_detail == "registering…":
+            self._set_registered(False, "no answer from the server")
+        return ok, self.reg_detail
+
     def reconfigure(self, **changes) -> bool:
         """Apply new account settings live and re-register.
 
@@ -489,7 +525,7 @@ class SIPPhone:
         v = parse_via(vias[0])
         received = v["params"].get("received")
         rport = v["params"].get("rport")
-        if received and received != self.local_ip and rport:
+        if received and rport and (received != self.local_ip or int(rport) != self.local_port):
             log.info("NAT detected: public address is %s:%s (local %s:%d) — re-registering with it",
                      received, rport, self.local_ip, self.local_port)
             self.local_ip = received
@@ -498,6 +534,13 @@ class SIPPhone:
 
     def _set_registered(self, ok: bool, detail: str) -> None:
         self.registered = ok
+        self.reg_detail = detail
+        if ok or detail in ("unregistered", "Team view only") or self.presence_only:
+            self._reg_backoff, self._reg_retry_at = 0.0, 0.0
+        else:
+            # a failed registration is retried by itself: 30 s, 60 s, … up to 5 min
+            self._reg_backoff = min(300.0, (self._reg_backoff * 2) or 30.0)
+            self._reg_retry_at = time.time() + self._reg_backoff
         log.info("registration: %s (%s)", "OK" if ok else ("ended" if detail == "unregistered" else "FAILED"), detail)
         if self.on_registration:
             self.on_registration(ok, detail)
@@ -1173,6 +1216,13 @@ class SIPPhone:
                 self.register_expiry = 0
                 log.info("refreshing registration")
                 self.register()
+            # a failed registration retries by itself (backoff set in _set_registered)
+            if (not self.registered and self._reg_retry_at and now >= self._reg_retry_at
+                    and not self.presence_only):
+                self._reg_retry_at = 0.0
+                log.info("retrying registration")
+                threading.Thread(target=self.reregister, kwargs={"timeout": 15}, daemon=True,
+                                 name="sip-reg-retry").start()
             # NAT keep-alive
             if now - last_keepalive >= self.cfg.keepalive_seconds:
                 last_keepalive = now

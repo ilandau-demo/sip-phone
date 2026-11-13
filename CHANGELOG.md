@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.6.0 — 2026-11-13 — up to 8 SIP accounts
+- **Several accounts at once.** Line 1 is the Phone line in Settings; Settings →
+  *More phone lines* adds lines 2–8 (`[line2]` … `[line8]` in config.ini: line
+  name, display name, SIP username, authentication name, password — stored
+  protected — domain, proxy, port, on/off). Each line registers on its own and
+  gets its own local SIP port; adding, changing or removing a line applies live.
+- **Account picker in the header**, where the name was: ● registered / ○ not,
+  "on a call"; the chosen line is the one you dial from and Re-register.
+- **One call has the audio** (desk-phone style): placing, answering or resuming
+  a call on one line puts the talking call on every other line on hold. A call
+  that rings on another line while you talk rings with Answer / Decline in a
+  strip above the call; held calls on other lines sit there with Resume / Hang
+  up. The main Hang up never ends the held calls on other lines. The toolbar
+  badge and the Answer/Decline notification follow a call ringing on any line.
+- Calls, the call screen blocks, Recent and Registration history show which line;
+  call-back and Redial go out on the line the call was on.
+- **Re-register reworked.** It now starts clean — re-resolves the server,
+  forgets the learned NAT address and any cached authentication, opens a fresh
+  registration — waits for the server's answer and shows it ("Front desk
+  registered (expires 3600s)" or why not). A NAT port change is now noticed
+  (only an address change was before). A failed registration also retries by
+  itself (30 s, 60 s, … up to every 5 minutes) instead of staying down until
+  someone clicks.
+- **"Updated to …" shows once** as a short toast instead of a banner that stayed
+  until the next restart.
+- Fixes: Settings no longer stays on "Registering…" when the answer comes back
+  within a second; the form refreshes before "Saved" so a field typed right
+  after saving isn't wiped; saving no longer rebuilds the Team view every time
+  (an empty *Event channels* counted as a change); push streams close when the
+  server stops, so the extension shows "Restarting…" promptly.
+- Extension files unchanged apart from the version number.
+
 ## 2.5.1 — 2026-11-12 — cleaner call screen, redial
 - **Cleaner call screen.** Each call is its own block; when it ends it folds
   into a one-line summary (caller · time · duration · messages — click to

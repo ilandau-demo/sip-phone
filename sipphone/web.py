@@ -78,6 +78,7 @@ class UIState:
             stt.on_text = heard
         self.events: Deque[dict] = collections.deque(maxlen=500)
         self.reg_log: Deque[dict] = collections.deque(maxlen=100)    # registration history (Settings)
+        self.closing = False                                          # server shutting down: end push streams
         self.next_id = 1
         self.lock = threading.Lock()
         self.reg_detail = "Team view only" if getattr(phone, "presence_only", False) else "registering…"
@@ -95,14 +96,14 @@ class UIState:
             self._last_state[key] = call.state
             if call.state == CallState.CALLING:
                 name = self.lookup(call.remote_number)
-                self.add("event", f"Calling {name + ' · ' if name else ''}{call.remote_number}")
+                self.add("event", f"Calling {name + ' · ' if name else ''}{call.remote_number}", call=call)
             elif call.state == CallState.CONNECTED:
                 codec = call.rtp.codec if call.rtp else "?"
                 self._answered.add(key)
-                self.add("event", f"Connected to {call.remote_number} ({codec})")
+                self.add("event", f"Connected to {call.remote_number} ({codec})", call=call)
             elif call.state == CallState.ENDED:
                 dur = f" after {self._fmt(time.time() - call.started_at)}" if call.started_at else ""
-                self.add("event", f"Call ended: {call.end_reason}{dur}")
+                self.add("event", f"Call ended: {call.end_reason}{dur}", call=call)
                 self._record_history(call)
 
         def on_incoming(call: Call) -> None:
@@ -110,16 +111,22 @@ class UIState:
                 prev_in(call)
             name = self.lookup(call.remote_number) or call.remote_display
             who = f"{name} ({call.remote_number})" if name else call.remote_number
-            self.add("event", f"Incoming call from {who}")
+            self.add("event", f"Incoming call from {who}", call=call)
 
         def on_reg(ok: bool, detail: str) -> None:
             if prev_reg:
                 prev_reg(ok, detail)
-            self.reg_detail = detail
+            line = getattr(self.phone, "last_reg_line", None)
+            if line is None or getattr(self.phone, "current", 1) == line.n:
+                self.reg_detail = detail
             # registration refreshes are not part of a call: kept for Settings → Phone line,
             # never written to the call transcript
+            entry = {"t": time.time(), "ok": bool(ok), "detail": detail}
+            if line is not None:
+                entry["line"] = line.label
+                entry["n"] = line.n
             with self.lock:
-                self.reg_log.append({"t": time.time(), "ok": bool(ok), "detail": detail})
+                self.reg_log.append(entry)
 
         phone.on_call_state, phone.on_incoming_call, phone.on_registration = on_state, on_incoming, on_reg
 
@@ -141,6 +148,9 @@ class UIState:
                  "name": self.lookup(call.remote_number) or call.remote_display, "outcome": outcome,
                  "duration": int(time.time() - call.started_at) if call.started_at else 0,
                  "reason": call.end_reason}
+        if getattr(call, "line_n", None):
+            entry["line"] = call.line_n
+            entry["line_label"] = getattr(call, "line_label", "")
         with self.lock:
             self._history.insert(0, entry)
             del self._history[200:]
@@ -169,9 +179,30 @@ class UIState:
             pass
         return out
 
-    def add(self, kind: str, text: str) -> None:
+    def _multi(self) -> bool:
+        return len(getattr(self.phone, "lines", {}) or {}) > 1
+
+    def _line_label(self, call) -> str:
+        return getattr(call, "line_label", "") if call is not None and self._multi() else ""
+
+    def add(self, kind: str, text: str, call=None) -> None:
+        """Append a line to the call screen. Transcript lines (said / heard /
+        tones / call events) carry the call they belong to, so the page can
+        keep one block per call; with several lines, the line's name too."""
+        if call is None and kind in ("said", "heard", "dtmf", "event"):
+            try:
+                call = self.phone.active_call
+            except Exception:
+                call = None
+        ev = {"id": 0, "kind": kind, "text": text, "t": time.time()}
+        if call is not None and kind != "system":
+            ev["call"] = call.call_id
+            lbl = self._line_label(call)
+            if lbl:
+                ev["line"] = lbl
         with self.lock:
-            self.events.append({"id": self.next_id, "kind": kind, "text": text, "t": time.time()})
+            ev["id"] = self.next_id
+            self.events.append(ev)
             self.next_id += 1
         if self.stream_clients():
             threading.Thread(target=self._push_state, kwargs={"force": True}, daemon=True).start()
@@ -343,7 +374,8 @@ class UIState:
         # shown as a toast (state.notifications), not as a transcript line
 
     def _call_dict(self, call) -> dict:
-        return {"state": call.state.value, "number": call.remote_number,
+        return {"id": call.call_id, "line": self._line_label(call), "line_n": getattr(call, "line_n", 1),
+                "state": call.state.value, "number": call.remote_number,
                 "name": self.lookup(call.remote_number) or call.remote_display,
                 "direction": call.direction,
                 "elapsed": self._fmt(time.time() - call.started_at) if call.started_at else "",
@@ -358,6 +390,12 @@ class UIState:
         c = self._call_dict(call) if call else None
         if c and consult:
             c["consult"] = self._call_dict(consult)
+        # calls on other lines (held, ringing) — shown as a strip with their own buttons
+        shown = {x.call_id for x in (call, consult) if x is not None}
+        others = [self._call_dict(x) for x in p.calls.values()
+                  if x.state != CallState.ENDED and x.call_id not in shown]
+        lines = p.info() if hasattr(p, "info") else []
+        cur = p.phone if hasattr(p, "lines") else p
         tts = None
         if hasattr(self.audio, "say") and (self.voice is None or self.voice.tts_enabled):
             tts = {"queued": round(self.audio.queued_seconds(), 1), "speaking": self.audio.speaking}
@@ -382,9 +420,11 @@ class UIState:
                 "needs_setup": bool(self.settings and self.settings.setup_needed),
                 "restart_pending": bool(self.settings and self.settings.pending),
                 "warnings": self._warnings(),
-                "display_name": p.cfg.display_name, "pickup_code": self.pickup_code, "reg_detail": self.reg_detail,
-                "account": f"{p.cfg.username}@{p.cfg.domain}",
-                "expires_in": max(0, int(p.register_expiry - time.time())) if p.register_expiry else 0,
+                "display_name": cur.cfg.display_name or cur.cfg.username, "pickup_code": self.pickup_code,
+                "reg_detail": getattr(cur, "reg_detail", "") if hasattr(p, "lines") else self.reg_detail,
+                "account": f"{cur.cfg.username}@{cur.cfg.domain}",
+                "lines": lines, "current_line": getattr(p, "current", 1), "other_calls": others,
+                "expires_in": max(0, int(cur.register_expiry - time.time())) if cur.register_expiry else 0,
                 "call": c, "tts": tts, "events": ev, "audio": getattr(self.audio, "name", "none"),
                 "notifications": list(self.notifications[-5:]), "script": self.script_runner.status()}
 
@@ -559,7 +599,7 @@ def make_handler(state: UIState):
                 send("state", snap)
                 send("team", state.team_opening())
                 last = time.time()
-                while True:
+                while not state.closing:
                     try:
                         kind, payload = q.get(timeout=1.0)
                     except queue.Empty:
@@ -573,6 +613,7 @@ def make_handler(state: UIState):
                 pass
             finally:
                 state.stream_close(q)
+                self.close_connection = True       # end the connection: the client sees the stream close
 
         def _json(self, obj, status=200):
             data = json.dumps(obj).encode()
@@ -870,22 +911,39 @@ def make_handler(state: UIState):
                     number = "".join(ch for ch in str(body.get("number", "")) if ch not in " -()")
                     if not number:
                         raise RuntimeError("Enter a number to call")
-                    p.call(number)
-                elif u.path == "/api/answer":
-                    p.answer()
-                elif u.path == "/api/reject":
-                    p.reject()
-                elif u.path == "/api/hangup":
-                    # end every live leg (covers consult/conference too)
-                    import sipphone.phone as _ph
-                    for cl in [c for c in p.calls.values() if c.state != _ph.CallState.ENDED]:
-                        p.hangup(cl.call_id)
-                elif u.path == "/api/hold":
-                    pc = p.primary_call() or p.active_call
-                    if pc and pc.local_hold:
-                        p.resume(pc.call_id); state.add("event", "Resumed")
+                    line_n = body.get("line")
+                    if line_n and hasattr(p, "lines"):
+                        p.call(number, line=int(line_n))
                     else:
-                        p.hold(pc.call_id if pc else None); state.add("event", "On hold")
+                        p.call(number)
+                elif u.path == "/api/answer":
+                    p.answer(body.get("call_id") or None)
+                elif u.path == "/api/reject":
+                    p.reject(body.get("call_id") or None)
+                elif u.path == "/api/hangup":
+                    import sipphone.phone as _ph
+                    cid = body.get("call_id")
+                    if cid:
+                        p.hangup(cid)
+                    else:
+                        # end every live leg of the call on screen (covers consult/conference),
+                        # never the held calls on other lines
+                        f = p.active_call
+                        owner = p.line_of(f).phone if (f is not None and hasattr(p, "line_of") and p.line_of(f)) else p
+                        for cl in [c for c in owner.calls.values() if c.state != _ph.CallState.ENDED]:
+                            owner.hangup(cl.call_id)
+                elif u.path == "/api/hold":
+                    cid = body.get("call_id")
+                    pc = (p.calls.get(cid) if cid else None) or p.primary_call() or p.active_call
+                    if pc and pc.local_hold:
+                        p.resume(pc.call_id); state.add("event", "Resumed", call=pc)
+                    else:
+                        p.hold(pc.call_id if pc else None); state.add("event", "On hold", call=pc)
+                elif u.path == "/api/lines/select":
+                    if not hasattr(p, "select"):
+                        raise RuntimeError("Only one line")
+                    p.select(int(body.get("n", 1)))
+                    state.reg_detail = getattr(p.phone, "reg_detail", state.reg_detail)
                 elif u.path == "/api/mute":
                     on = not (p.active_call.muted if p.active_call else False)
                     p.mute(on); state.add("event", "Microphone muted" if on else "Microphone on")
@@ -942,7 +1000,15 @@ def make_handler(state: UIState):
                         aud.stop_speaking()
                         state.add("event", "Stopped speaking")
                 elif u.path == "/api/register":
-                    p.register()
+                    # a real re-register: fresh DNS, address, nonce and dialog, then wait for the answer
+                    n = body.get("line")
+                    if hasattr(p, "reregister") and hasattr(p, "lines"):
+                        ok, detail = p.reregister(int(n) if n else None, timeout=10)
+                    elif hasattr(p, "reregister"):
+                        ok, detail = p.reregister(timeout=10)
+                    else:
+                        ok, detail = p.register(wait=True), ""
+                    return self._json({"ok": bool(ok), "detail": detail})
                 elif u.path == "/api/quit":
                     if state.on_quit is None:
                         raise RuntimeError("Quit from the terminal window (Ctrl+C)")
@@ -1032,7 +1098,12 @@ def serve(phone: SIPPhone, audio, host: str = "127.0.0.1", port: int = 8088,
     state.on_quit = on_quit
     state.monitor = monitor
     state.pickup_code = pickup_code or "*97"
-    state.warnings = list(warnings or [])
+    # "Updated to …" is news, not a problem: a one-time toast instead of a banner
+    # that stays until the next restart
+    state.warnings = [w for w in (warnings or []) if not str(w).startswith("Updated to ")]
+    for w in (warnings or []):
+        if str(w).startswith("Updated to "):
+            state.add("system", str(w))
     state.started_mode = started_mode or state.mode
     state.updater = updater
     if config_path:
@@ -1043,6 +1114,14 @@ def serve(phone: SIPPhone, audio, host: str = "127.0.0.1", port: int = 8088,
         if updater is not None and update_opts:
             updater.configure(update_opts)
     srv = ThreadingHTTPServer((host, port), make_handler(state))
+    # shutting the server down also ends the open push streams, so the browser
+    # bridge sees the app go away (a restart) instead of a stream that stays up
+    _orig_shutdown = srv.shutdown
+
+    def _shutdown() -> None:
+        state.closing = True
+        _orig_shutdown()
+    srv.shutdown = _shutdown                            # type: ignore[assignment]
     srv.daemon_threads = True
     srv.ui_state = state  # type: ignore[attr-defined]
     threading.Thread(target=srv.serve_forever, name="sip-ui", daemon=True).start()

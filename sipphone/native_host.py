@@ -309,6 +309,11 @@ def _status_from_state(s: dict) -> dict:
           "update": (s.get("update") or {}).get("available"),
           "extension_build": s.get("extension_build", "")}
     c = s.get("call")
+    # a call ringing on another line matters more than the one in progress:
+    # the badge rings and the Answer/Decline notification appears for it
+    ring = next((o for o in (s.get("other_calls") or []) if o.get("state") == "incoming"), None)
+    if ring and not (c and c.get("state") == "incoming"):
+        c = ring
     if c:
         st["call"] = {"state": c.get("state"), "number": c.get("number"),
                       "name": c.get("name") or "", "elapsed": c.get("elapsed", "")}

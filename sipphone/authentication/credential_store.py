@@ -19,7 +19,8 @@ import sys
 
 log = logging.getLogger("sipphone.auth")
 
-SECRET_KEYS = {("account", "password"), ("presence", "xsi_password"), ("admin", "password")}
+SECRET_KEYS = {("account", "password"), ("presence", "xsi_password"), ("admin", "password")} | {
+    (f"line{n}", "password") for n in range(2, 9)}
 _ENTROPY = b"sipphone-credential-store-1"
 
 

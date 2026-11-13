@@ -691,9 +691,20 @@ def main(argv=None) -> int:
     phone.on_registration = on_reg
 
     monitor = None
-    build_monitor = lambda opts: make_monitor(opts, phone)   # noqa: E731
 
     phone.start()
+    # Lines 2–8 ([line2] … [line8]) share the audio device; `phone` becomes the
+    # multi-line front that the UI, scripts and settings use.
+    from .lines import Lines, line_configs
+    from . import config_store as _cs
+    _cp = _cs.read(args.config)
+    phone = Lines(phone, label=_cp.get("account", "label", fallback="").strip() if _cp.has_section("account") else "")
+    for _n, (_lcfg, _label) in sorted(line_configs(_cp, cfg).items()):
+        try:
+            phone.set_line(_n, _lcfg, _label)
+        except Exception as e:
+            problem(f"Line {_n} ({_lcfg.username}) couldn't start: {e}")
+    build_monitor = lambda opts: make_monitor(opts, phone)   # noqa: E731
     if presence_mode(admin_opts):
         try:
             monitor = build_monitor(admin_opts)
