@@ -24,7 +24,7 @@ mock = MockXsi(TEAM, directory=TEAM + [(HG, "hg_sales", "Hunt Group", "1100"), (
                                        (CC, "cc_support", "Call Center", "1200")])
 from tests.test_presence_engine import ALICE, BOB, CAROL
 mock.groups = {ALICE: "3149647G", BOB: "3149647G", CAROL: "5550001G"}
-config_store.update(p, {"app": {"mode": "presence"},
+config_store.update(p, {"app": {"mode": "phone"},
                         "account": {"username": USER, "auth_username": AUTH, "password": PASS, "domain": REALM,
                                     "proxy": "127.0.0.1", "proxy_port": str(sw.port)},
                         "local": {"bind_port": "0"}, "audio": {"backend": "null"},
@@ -32,10 +32,10 @@ config_store.update(p, {"app": {"mode": "presence"},
                         "admin": {"xsi_host": mock.base, "verify_tls": "false", "show_services": "hunt_group, call_center"}})
 cfg, _, adm = load_config(p)
 adm["cache_path"] = os.path.join(d, "directory-cache.json")
-phone = SIPPhone(cfg, audio=open_audio(kind="null")); phone.presence_only = True; phone.start()
+phone = SIPPhone(cfg, audio=open_audio(kind="null")); phone.start(); phone.register(wait=True)
 mon = make_monitor(adm, phone)
 srv = web.serve(phone, phone.audio, port=0, open_browser=False, phrases_path=f"{d}/p", contacts_path=f"{d}/c",
-                history_path=f"{d}/h", config_path=p, monitor=mon, started_mode="presence",
+                history_path=f"{d}/h", config_path=p, monitor=mon, started_mode="phone",
                 build_monitor=lambda o: make_monitor(o, phone))
 base = f"http://127.0.0.1:{srv.server_address[1]}"
 OUT = sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp()
@@ -101,6 +101,37 @@ with sync_playwright() as pw:
     check("checkbox sits beside its text, not above it", abs(box_in - box_tx) < 8)
     pg.locator("#pd-watch-opts").scroll_into_view_if_needed()
     pg.screenshot(path=os.path.join(OUT, "groups_details.png"))
+    # Settings → hide the whole Team view
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    pg.click("#btn-settings"); pg.wait_for_timeout(700)
+    check("Team view settings visible while shown", pg.is_visible("section[data-team]"))
+    pg.uncheck("[data-k='app.show_team']"); pg.wait_for_timeout(200)
+    check("unticking folds the Team view settings away", pg.is_hidden("section[data-team]"))
+    pg.click("#s-save"); pg.wait_for_timeout(1200)
+    check("save confirms", "Display updated" in pg.inner_text("#s-msg"))
+    pg.click("#s-close"); pg.wait_for_timeout(1200)
+    check("Team tab gone", pg.is_hidden("#tab-team"))
+    check("Contacts tab shown instead", "on" in (pg.get_attribute("#tab-contacts", "class") or "") or pg.is_visible("#contacts"))
+    check("show_team saved in config.ini", "show_team = false" in open(p).read())
+    pg.screenshot(path=os.path.join(OUT, "groups_noteam.png"))
+    pg.reload(); pg.wait_for_timeout(1800)
+    check("still hidden after a reload", pg.is_hidden("#tab-team"))
+    pg.click("#btn-settings"); pg.wait_for_timeout(700)
+    pg.check("[data-k='app.show_team']"); pg.click("#s-save"); pg.wait_for_timeout(1200)
+    pg.click("#s-close"); pg.wait_for_timeout(1200)
+    check("ticking it brings the Team tab back", pg.is_visible("#tab-team"))
+    # hide the call transcript
+    check("transcript area shown by default", pg.is_visible("#thread"))
+    pg.click("#btn-settings"); pg.wait_for_timeout(700)
+    pg.uncheck("[data-k='app.show_transcript']"); pg.click("#s-save"); pg.wait_for_timeout(1200)
+    pg.click("#s-close"); pg.wait_for_timeout(1200)
+    check("transcript hidden", pg.is_hidden("#thread"))
+    check("show_transcript saved", "show_transcript = false" in open(p).read())
+    pg.screenshot(path=os.path.join(OUT, "groups_notranscript.png"))
+    pg.click("#btn-settings"); pg.wait_for_timeout(700)
+    pg.check("[data-k='app.show_transcript']"); pg.click("#s-save"); pg.wait_for_timeout(1200)
+    pg.click("#s-close"); pg.wait_for_timeout(1200)
+    check("transcript back", pg.is_visible("#thread"))
     b.close()
 check("name saved to group-names.json", "Sales Line" in open(os.path.join(d, "group-names.json")).read())
 check("group name saved to org-group-names.json", "Arizona" in open(os.path.join(d, "org-group-names.json")).read())

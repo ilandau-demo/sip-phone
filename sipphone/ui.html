@@ -148,6 +148,8 @@
   .chips button.on .n { color: rgba(255,255,255,.85); }
   .chips button.grp { border-style: dashed; }
   .chips button.grp.on { border-style: solid; }
+  .s-body.noteam-pending .s-sec[data-team] { display: none; }
+  body.notranscript #thread { display: none; }
   .s-grp-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
   .s-grp-row input { flex: 1 1 160px; min-width: 0; }
   #s-grp-pick { width: 100%; }
@@ -726,6 +728,10 @@
         <label><input type="radio" name="appmode" value="phone" data-k="app.mode"><b>Phone + Team view</b><small>Registers your SIP line: make and take calls, text-to-speech, transfers, pick-ups.</small></label>
         <label><input type="radio" name="appmode" value="presence"><b>Team view only</b><small>Just the presence board. No phone line is registered and nothing can be called.</small></label>
       </div>
+      <label class="check" data-app="phone" id="s-showteam"><input type="checkbox" data-k="app.show_team"><span>Show the Team view (presence)</span></label>
+      <small data-app="phone" class="s-note" id="s-showteam-note">Untick to hide everything about presence: the Team tab, teammates on boards, availability alerts and the Team view settings. Your contacts, Recent and calls stay. Applies when you Save.</small>
+      <label class="check" data-app="phone" id="s-showtr"><input type="checkbox" data-k="app.show_transcript"><span>Show the call transcript</span></label>
+      <small data-app="phone" class="s-note">Untick to hide the conversation area (what you said, what the caller said, call events). Calls, the dial pad and the buttons stay; transcription can be switched off separately under Voice engine.</small>
       <p id="s-mode-restart" hidden style="color:var(--ring)">Switching to the phone needs a restart (audio isn't loaded in Team-view-only mode).</p>
     </section>
 
@@ -868,7 +874,7 @@
       </details>
     </section>
 
-    <section class="s-sec">
+    <section class="s-sec" data-team>
       <h3>Team view</h3>
       <p>See which teammates are free, ringing or on a call.</p>
       <label class="s-field"><span>Presence source</span>
@@ -1642,7 +1648,9 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       bar.insertBefore(t, edit);
     }
   };
-  const teamAvailable = () => (lastState && lastState.has_monitor) || presenceMode;
+  // [app] show_team = false hides the whole Team view (phone mode only; Team-view-only mode always shows it)
+  const teamShown = () => presenceMode || !lastState || lastState.show_team !== false;
+  const teamAvailable = () => teamShown() && ((lastState && lastState.has_monitor) || presenceMode);
   const visibleTabs = () => {
     const hidden = new Set(boardsData.hidden), out = [];
     if (teamAvailable() && !hidden.has('team')) out.push('team');
@@ -1654,7 +1662,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const renderBoard = () => {
     const b = boardOf(curTab.slice(6)), box = $('board'); if (!b) return;
     box.innerHTML = '';
-    const j = lastTeam && lastTeam.enabled ? lastTeam : null;
+    const j = lastTeam && lastTeam.enabled && teamShown() ? lastTeam : null;
     const team = new Map((j ? j.users : []).map(u => [u.user_id, u]));
     const svcs = new Map((j ? (j.services || []) : []).map(u => [u.user_id, u]));
     const byNum = new Map(contacts.map((c, i) => [c.number, i]));
@@ -1834,6 +1842,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       const sp = document.createElement('span'); sp.textContent = t.label; l.append(c, sp); svcBox.appendChild(l);
     }
     sdlg.querySelectorAll('input[name="appmode"]').forEach(r => { r.checked = r.value === (v.app.mode || 'phone'); });
+    syncShowTeam();
     loadGroupNames();
     applyMode();
     renderUpdates();
@@ -2075,6 +2084,14 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const en = sdlg.querySelector(`[data-k="line${n}.enabled"]`); if (en) en.checked = false;
     sMsg(`Line ${n} will be removed when you Save.`);
   });
+  // "Show the Team view" off (phone mode): the Team view settings fold away as soon as the box is unticked
+  const syncShowTeam = () => {
+    const box = sdlg.querySelector('[data-k="app.show_team"]'); if (!box) return;
+    const phone = (sdlg.querySelector('input[name="appmode"]:checked') || {}).value !== 'presence';
+    sdlg.querySelector('.s-body').classList.toggle('noteam-pending', phone && !box.checked);
+  };
+  sdlg.querySelector('[data-k="app.show_team"]').addEventListener('change', syncShowTeam);
+  sdlg.querySelectorAll('input[name="appmode"]').forEach(r => r.addEventListener('change', syncShowTeam));
   $('btn-settings').onclick = openSettings;
   $('s-close').onclick = $('s-cancel').onclick = () => sdlg.close();
   $('s-save').onclick = async () => {
@@ -2091,6 +2108,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       if (j.applied.includes('mode')) bits.push(collect().app.mode === 'presence' ? 'Now Team view only.' : 'Phone mode on.');
       if (j.applied.includes('team')) bits.push(j.monitor_error ? 'Team view error: ' + j.monitor_error : 'Team view updated.');
       if (j.applied.includes('startup')) bits.push('Startup setting saved.');
+      if (j.applied.includes('ui')) bits.push('Display updated.');
       if (j.applied.includes('lines')) bits.push('Lines updated — registering.');
       // refresh the form first, then say "Saved" — so a field edited right after the
       // message is never wiped by the refresh
@@ -2444,14 +2462,17 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       if (warns.length && s.has_settings) { const b = document.createElement('button'); b.textContent = 'Open Settings'; b.onclick = openSettings; wb.appendChild(b); }
     }
     lastState = s;
-    $('tab-team').hidden = (!s.has_monitor && !presenceMode) || boardsData.hidden.includes('team');
-    if (s.has_monitor && !teamDefaulted) {
+    lastState = s;
+    $('tab-team').hidden = !teamAvailable() || boardsData.hidden.includes('team');
+    document.body.classList.toggle('noteam', !teamShown());
+    document.body.classList.toggle('notranscript', !presenceMode && s.show_transcript === false);
+    if (s.has_monitor && teamShown() && !teamDefaulted) {
       teamDefaulted = true;
       let want = ''; try { want = localStorage.getItem('sipphone.tab') || ''; } catch (e) {}
       const vis = visibleTabs();
       showTab(vis.includes(want) ? want : vis.includes('team') ? 'team' : (vis.find(t => t.startsWith('board:')) || vis[0] || 'contacts'));
     }
-    if (!s.has_monitor && teamTab && !presenceMode) showTab(visibleTabs()[0] || 'contacts');
+    if ((!s.has_monitor || !teamShown()) && teamTab && !presenceMode) showTab(visibleTabs()[0] || 'contacts');
     if (presenceMode && !teamTab && !curTab.startsWith('board:')) showTab(visibleTabs()[0] || 'team');
     if (s.version) { $('ver').textContent = 'v' + s.version; if (!$('s-cur-ver').textContent) $('s-cur-ver').textContent = s.version; }
     if (s.stt) $('stt-on').checked = s.stt.enabled;
@@ -2480,7 +2501,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     else { st.className = ''; st.textContent = s.registered ? `Registration renews in ${Math.round(s.expires_in / 60)} min` : ''; }
 
     for (const ev of s.events) { addMsg(ev); lastEvent = ev.id; }
-    showNotifications(s.notifications);
+    if (teamShown()) showNotifications(s.notifications);
     if (s.events.some(e => e.kind === 'event' && e.text.startsWith('Incoming')) && document.hidden) {
       document.title = '● Incoming call — Telvoro';
     } else if (!call || call.state !== 'incoming') document.title = 'Telvoro';

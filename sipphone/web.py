@@ -79,6 +79,8 @@ class UIState:
         self.events: Deque[dict] = collections.deque(maxlen=500)
         self.reg_log: Deque[dict] = collections.deque(maxlen=100)    # registration history (Settings)
         self.closing = False                                          # server shutting down: end push streams
+        self.show_team = True                                         # [app] show_team: the Team view section
+        self.show_transcript = True                                   # [app] show_transcript: the call screen
         self.next_id = 1
         self.lock = threading.Lock()
         self.reg_detail = "Team view only" if getattr(phone, "presence_only", False) else "registering…"
@@ -415,7 +417,7 @@ class UIState:
                 "extension_build": ext_build,
                 "mode": "presence" if p.presence_only else "phone", "started_mode": self.started_mode,
                 "update": upd,
-                "has_monitor": self.monitor is not None, "version": __version__,
+                "has_monitor": self.monitor is not None, "show_team": self.show_team, "show_transcript": self.show_transcript, "version": __version__,
                 "has_settings": self.settings is not None,
                 "needs_setup": bool(self.settings and self.settings.setup_needed),
                 "restart_pending": bool(self.settings and self.settings.pending),
@@ -1108,6 +1110,14 @@ def serve(phone: SIPPhone, audio, host: str = "127.0.0.1", port: int = 8088,
     state.updater = updater
     if config_path:
         from .settings import SettingsManager
+        try:
+            from . import config_store as _cs
+            _cp = _cs.read(config_path)
+            _flag = lambda k: (_cp.get("app", k, fallback="true") if _cp.has_section("app") else "true"
+                               ).strip().lower() not in ("false", "no", "0", "off")   # noqa: E731
+            state.show_team, state.show_transcript = _flag("show_team"), _flag("show_transcript")
+        except Exception:
+            pass
         state.settings = SettingsManager(config_path, phone, state, build_monitor=build_monitor,
                                          on_restart=on_restart, started_mode=state.started_mode,
                                          on_update_opts=(updater.configure if updater is not None else None))

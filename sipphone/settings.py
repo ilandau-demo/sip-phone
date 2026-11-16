@@ -58,6 +58,8 @@ FIELDS = [
     ("update", "source", "update", "str"),
     ("update", "auto", "update", "bool"),
     ("app", "start_with_windows", "startup", "bool"),
+    ("app", "show_team", "ui", "bool"),
+    ("app", "show_transcript", "ui", "bool"),
     ("app", "debug", "restart", "bool"),
     ("extension", "store_id", "bridge", "str"),
     ("account", "label", "line1", "str"),
@@ -69,7 +71,7 @@ for _n in range(2, 9):
                (f"line{_n}", "auth_username", f"line{_n}", "str"), (f"line{_n}", "password", f"line{_n}", "secret"),
                (f"line{_n}", "domain", f"line{_n}", "str"), (f"line{_n}", "proxy", f"line{_n}", "str"),
                (f"line{_n}", "proxy_port", f"line{_n}", "port")]
-DEFAULTS = {("app", "mode"): "phone", ("app", "debug"): "false", ("update", "auto"): "false", ("app", "start_with_windows"): "false",
+DEFAULTS = {("app", "show_team"): "true", ("app", "show_transcript"): "true", ("app", "mode"): "phone", ("app", "debug"): "false", ("update", "auto"): "false", ("app", "start_with_windows"): "false",
             ("account", "proxy_port"): "5060", ("local", "bind_port"): "5060",
             ("admin", "xsi_host"): "https://xsi.nextiva.com", ("admin", "users_only"): "true",
             ("admin", "poll_seconds"): "5", ("admin", "pickup_code"): "*97"}
@@ -87,7 +89,7 @@ LABELS = {
     ("presence", "xsi_user"): "Directory login",
     ("presence", "xsi_password"): "Directory password", ("presence", "mode"): "Presence source",
     ("presence", "channels"): "Event channels",
-    ("app", "mode"): "Mode", ("update", "source"): "Update source",
+    ("app", "mode"): "Mode", ("update", "source"): "Update source", ("app", "show_team"): "Show the Team view", ("app", "show_transcript"): "Show the call transcript",
 }
 APP_MODES = ("phone", "presence")
 PRESENCE_MODES = ("", "events", "admin")
@@ -398,6 +400,13 @@ class SettingsManager:
                         self.ui.reg_detail = "registering…"
                     threading.Thread(target=self._reconfigure, args=({},), daemon=True, name="sip-reregister").start()
                 applied.append("mode")
+            if "ui" in groups:
+                if self.ui is not None:
+                    cp_now = self._cp()
+                    flag = lambda k: self._raw(cp_now, "app", k).strip().lower() not in ("false", "no", "0", "off")
+                    self.ui.show_team = flag("show_team")
+                    self.ui.show_transcript = flag("show_transcript")
+                applied.append("ui")
             if "startup" in groups:
                 from .app import set_start_with_windows
                 try:

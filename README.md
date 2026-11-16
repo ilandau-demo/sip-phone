@@ -211,6 +211,10 @@ monitor); listen port, audio devices and TTS/STT need a restart (one click in
 app mode). Passwords are write-only — `GET /api/settings` reports only whether
 one is saved.
 
+To keep the screen to just the phone, Settings → *Use Telvoro as* has *Show
+the Team view (presence)* and *Show the call transcript*; untick either to hide
+it (`[app] show_team = false` / `show_transcript = false` in config.ini).
+
 The local API accepts POSTs only as `application/json` from the page itself
 (`http://127.0.0.1:8088`), a browser extension, or a program that sends no
 `Origin` header, and every request must carry a `127.0.0.1`/`localhost` Host

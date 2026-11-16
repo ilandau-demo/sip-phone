@@ -239,6 +239,12 @@ MORE THAN ONE ACCOUNT
   and says whether it worked. Settings > More phone lines > Registration
   history lists every registration and failure.
 
+HIDE THE TEAM VIEW OR THE TRANSCRIPT
+  Settings > Use Telvoro as: untick "Show the Team view (presence)" to remove
+  the Team tab, teammates, availability alerts and their settings; untick
+  "Show the call transcript" to hide the conversation area. Tick again to
+  bring them back.
+
 IF THE APP WON'T OPEN / "127.0.0.1 didn't send any data"
   Run in PowerShell:   python -m sipphone --diagnose
   It shows which install is active, who holds port 8088, whether the stored
