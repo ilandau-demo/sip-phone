@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.1 — 2026-11-16 — hide the Team view or the transcript
+- **Hide the Team view or the transcript.** Settings → *Use Telvoro as* has two
+  new ticks (phone mode): *Show the Team view (presence)* — untick to remove
+  everything about presence: the Team tab, teammates on the boards,
+  availability alerts and the Team view settings section; and *Show the call
+  transcript* — untick to hide the conversation area. Both apply at once and
+  are kept in config.ini (`[app] show_team`, `show_transcript`).
+- Extension files unchanged apart from the version number.
+
 ## 2.6.0 — 2026-11-13 — up to 8 SIP accounts
 - **Several accounts at once.** Line 1 is the Phone line in Settings; Settings →
   *More phone lines* adds lines 2–8 (`[line2]` … `[line8]` in config.ini: line
@@ -30,12 +39,6 @@
   after saving isn't wiped; saving no longer rebuilds the Team view every time
   (an empty *Event channels* counted as a change); push streams close when the
   server stops, so the extension shows "Restarting…" promptly.
-- **Hide the Team view or the transcript.** Settings → *Use Telvoro as* has two
-  new ticks (phone mode): *Show the Team view (presence)* — untick to remove
-  everything about presence: the Team tab, teammates on the boards,
-  availability alerts and the Team view settings section; and *Show the call
-  transcript* — untick to hide the conversation area. Both apply at once and
-  are kept in config.ini (`[app] show_team`, `show_transcript`).
 - Extension files unchanged apart from the version number.
 
 ## 2.5.1 — 2026-11-12 — cleaner call screen, redial
