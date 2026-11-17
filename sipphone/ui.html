@@ -1650,7 +1650,11 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       t.textContent = b.name; t.dataset.board = b.id; t.onclick = () => showTab('board:' + b.id);
       bar.insertBefore(t, edit);
     }
+    syncLists();
   };
+  // Team view hidden and no tab left to show: the whole list area goes. Worked out again
+  // whenever the tabs are rebuilt, because the boards and the app state load in either order.
+  const syncLists = () => document.body.classList.toggle('nolists', !presenceMode && !teamShown() && !visibleTabs().length);
   // [app] show_team = false hides the whole Team view (phone mode only; Team-view-only mode always shows it)
   const teamShown = () => presenceMode || !lastState || lastState.show_team !== false;
   // with the Team view hidden a board shows only its contacts; a board of teammates/services only disappears
@@ -2475,7 +2479,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       teamWasShown = teamShown(); renderTabs();
       if (!visibleTabs().includes(curTab)) showTab(visibleTabs()[0] || 'contacts'); else if (curTab.startsWith('board:')) loadBoard();
     }
-    document.body.classList.toggle('nolists', !presenceMode && !teamShown() && !visibleTabs().length);
+    syncLists();
     document.body.classList.toggle('notranscript', !presenceMode && s.show_transcript === false);
     if (s.has_monitor && teamShown() && !teamDefaulted) {
       teamDefaulted = true;
