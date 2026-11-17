@@ -113,6 +113,21 @@ with sync_playwright() as pw:
     check("Team tab gone", pg.is_hidden("#tab-team"))
     check("Contacts tab shown instead", "on" in (pg.get_attribute("#tab-contacts", "class") or "") or pg.is_visible("#contacts"))
     check("show_team saved in config.ini", "show_team = false" in open(p).read())
+    check("no keypad hint under Call", pg.is_hidden("#hint"))
+    # boards: teammates vanish with the Team view; a board of teammates only goes away
+    setb = "b => fetch('/api/boards', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b)}).then(r => r.json())"
+    tm = {"type": "team", "id": "birichmond@nextiva.com"}
+    pg.evaluate(setb, {"hidden": [], "boards": [{"name": "Sales", "members": [tm]},
+                {"name": "Mixed", "members": [tm, {"type": "contact", "id": "5551230001"}]}]})
+    pg.reload(); pg.wait_for_timeout(1800)
+    tabs = pg.inner_text("#tabs")
+    check("teammates-only board hidden", "Sales" not in tabs)
+    check("board with a contact stays", "Mixed" in tabs)
+    pg.click("#tabs .tab-board"); pg.wait_for_timeout(500)
+    check("no teammate rows on it", "birichmond" not in pg.inner_text("#board") and "Team view off" not in pg.inner_text("#board"))
+    pg.evaluate(setb, {"hidden": ["contacts", "recent"], "boards": [{"name": "Sales", "members": [tm]}]})
+    pg.reload(); pg.wait_for_timeout(1800)
+    check("nothing left to list: whole section hidden", pg.is_hidden(".contacts"))
     pg.screenshot(path=os.path.join(OUT, "groups_noteam.png"))
     pg.reload(); pg.wait_for_timeout(1800)
     check("still hidden after a reload", pg.is_hidden("#tab-team"))
@@ -120,6 +135,7 @@ with sync_playwright() as pw:
     pg.check("[data-k='app.show_team']"); pg.click("#s-save"); pg.wait_for_timeout(1200)
     pg.click("#s-close"); pg.wait_for_timeout(1200)
     check("ticking it brings the Team tab back", pg.is_visible("#tab-team"))
+    check("section and Sales board are back", pg.is_visible(".contacts") and "Sales" in pg.inner_text("#tabs"))
     # hide the call transcript
     check("transcript area shown by default", pg.is_visible("#thread"))
     pg.click("#btn-settings"); pg.wait_for_timeout(700)

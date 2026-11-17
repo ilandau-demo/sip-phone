@@ -241,7 +241,8 @@ MORE THAN ONE ACCOUNT
 
 HIDE THE TEAM VIEW OR THE TRANSCRIPT
   Settings > Use Telvoro as: untick "Show the Team view (presence)" to remove
-  the Team tab, teammates, availability alerts and their settings; untick
+  the Team tab, teammates (also on your own boards), availability alerts and
+  their settings; untick
   "Show the call transcript" to hide the conversation area. Tick again to
   bring them back.
 

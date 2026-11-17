@@ -7,6 +7,11 @@
   availability alerts and the Team view settings section; and *Show the call
   transcript* — untick to hide the conversation area. Both apply at once and
   are kept in config.ini (`[app] show_team`, `show_transcript`).
+  With the Team view hidden, custom boards lose their teammates and services
+  too: a board made only of those disappears, a board with contacts keeps just
+  the contacts, and if no tab is left the whole list area under the keypad is
+  hidden.
+- Removed the "Keys dial a number…" line under Call / Redial.
 - Extension files unchanged apart from the version number.
 
 ## 2.6.0 — 2026-11-13 — up to 8 SIP accounts

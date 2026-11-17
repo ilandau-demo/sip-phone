@@ -149,6 +149,8 @@
   .chips button.grp { border-style: dashed; }
   .chips button.grp.on { border-style: solid; }
   .s-body.noteam-pending .s-sec[data-team] { display: none; }
+  body.nolists .contacts { display: none; }
+  .hint:empty { display: none; }
   body.notranscript #thread { display: none; }
   .s-grp-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
   .s-grp-row input { flex: 1 1 160px; min-width: 0; }
@@ -550,7 +552,7 @@
         <button class="c-cancel" id="btn-cancel">Cancel</button>
       </div>
     </div>
-    <p class="hint" id="hint">Keys dial a number. During a call they send touch tones.</p>
+    <p class="hint" id="hint"></p>
     <div class="contacts">
       <div class="head">
         <div class="tabs" id="tabs"><button id="tab-team" hidden>Team</button><button class="on" id="tab-contacts">Contacts</button><button id="tab-recent">Recent</button><button id="tab-edit" class="tab-edit" title="Pin tabs and make custom boards" aria-label="Edit tabs">⋯</button></div>
@@ -1632,7 +1634,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     }
   };
   // ---- boards: custom tabs mixing teammates and contacts; pinned built-in tabs ----
-  let boardsData = {hidden: [], boards: []}, curTab = 'contacts';
+  let boardsData = {hidden: [], boards: []}, curTab = 'contacts', teamWasShown = true;
   const boardOf = id => boardsData.boards.find(b => b.id === id);
   const renderTabs = () => {
     const bar = $('tabs');
@@ -1643,6 +1645,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     $('tab-recent').hidden = hidden.has('recent');
     const edit = $('tab-edit');
     for (const b of boardsData.boards) {
+      if (!boardShown(b)) continue;
       const t = document.createElement('button'); t.className = 'tab-board' + (curTab === 'board:' + b.id ? ' on' : '');
       t.textContent = b.name; t.dataset.board = b.id; t.onclick = () => showTab('board:' + b.id);
       bar.insertBefore(t, edit);
@@ -1650,13 +1653,15 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   };
   // [app] show_team = false hides the whole Team view (phone mode only; Team-view-only mode always shows it)
   const teamShown = () => presenceMode || !lastState || lastState.show_team !== false;
+  // with the Team view hidden a board shows only its contacts; a board of teammates/services only disappears
+  const boardShown = b => teamShown() || !b.members.length || b.members.some(m => m.type === 'contact');
   const teamAvailable = () => teamShown() && ((lastState && lastState.has_monitor) || presenceMode);
   const visibleTabs = () => {
     const hidden = new Set(boardsData.hidden), out = [];
     if (teamAvailable() && !hidden.has('team')) out.push('team');
     if (!presenceMode && !hidden.has('contacts')) out.push('contacts');
     if (!presenceMode && !hidden.has('recent')) out.push('recent');
-    for (const b of boardsData.boards) out.push('board:' + b.id);
+    for (const b of boardsData.boards) if (boardShown(b)) out.push('board:' + b.id);
     return out;
   };
   const renderBoard = () => {
@@ -1667,10 +1672,11 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const svcs = new Map((j ? (j.services || []) : []).map(u => [u.user_id, u]));
     const byNum = new Map(contacts.map((c, i) => [c.number, i]));
     const groups = [['team', 'Team'], ['service', 'Services'], ['contact', 'Contacts']];
+    const only = teamShown() ? b.members : b.members.filter(m => m.type === 'contact');
     for (const [kind, label] of groups) {
-      const members = b.members.filter(m => m.type === kind);
+      const members = only.filter(m => m.type === kind);
       if (!members.length) continue;
-      if (b.members.some(m => m.type !== kind)) {
+      if (only.some(m => m.type !== kind)) {
         const hdr = document.createElement('div'); hdr.className = 'dept-hdr';
         const n = document.createElement('span'); n.className = 'dept-name'; n.textContent = label;
         const cnt = document.createElement('span'); cnt.className = 'dept-count';
@@ -2465,6 +2471,11 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     lastState = s;
     $('tab-team').hidden = !teamAvailable() || boardsData.hidden.includes('team');
     document.body.classList.toggle('noteam', !teamShown());
+    if (teamShown() !== teamWasShown) {            // boards gain or lose their teammates
+      teamWasShown = teamShown(); renderTabs();
+      if (!visibleTabs().includes(curTab)) showTab(visibleTabs()[0] || 'contacts'); else if (curTab.startsWith('board:')) loadBoard();
+    }
+    document.body.classList.toggle('nolists', !presenceMode && !teamShown() && !visibleTabs().length);
     document.body.classList.toggle('notranscript', !presenceMode && s.show_transcript === false);
     if (s.has_monitor && teamShown() && !teamDefaulted) {
       teamDefaulted = true;
@@ -2482,7 +2493,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     $('btn-hang').className = 'hang' + (call && call.state === 'incoming' ? '' : ' wide');
     $('btn-hang').textContent = call && call.state === 'calling' ? 'Cancel' : call && call.state === 'incoming' ? 'Decline' : 'Hang up';
     $('hint').textContent = connected() ? 'Keys now send touch tones to the call.'
-                          : live ? '' : 'Keys dial a number. During a call they send touch tones.';
+                          : '';
     if (s.events.some(e => e.text.startsWith('Call ended')) && !live) { number.value = ''; if (!$('recent').hidden) setTimeout(loadRecent, 300); }
 
     const can = connected() && !!tts;
