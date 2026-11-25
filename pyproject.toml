@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sipphone"
-version = "2.6.1"
+version = "2.7.1"
 description = "SIP 2.0 softphone with text-to-speech and a browser UI (Nextiva-ready)"
 readme = "README.md"
 requires-python = ">=3.9"

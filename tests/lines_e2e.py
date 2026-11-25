@@ -80,7 +80,7 @@ with sync_playwright() as pw:
     pg.screenshot(path=os.path.join(OUT, "lines_two_calls.png"))
     pg.click("#otherlines button:has-text('Resume')")
     check("Resume swaps: line 1 back, line 2 held", wait(lambda: "FRONT DESK" in pg.inner_text("#callstate").upper() and "Sales demo" in pg.inner_text("#otherlines") and "On hold" in pg.inner_text("#otherlines")))
-    pg.click("#otherlines button:has-text('Hang up')")
+    pg.click("#otherlines button.end")
     check("hanging up the held line leaves line 1", wait(lambda: pg.is_hidden("#otherlines") and "Connected" in pg.inner_text("#callstate")))
     pg.click("#btn-hang")
     check("line 1 hung up", wait(lambda: "No call" in pg.inner_text("#callstate")))

@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.7.1 — 2026-11-25 — installer explains Microsoft Store Python
+- **Install.bat detects Python from the Microsoft Store.** Windows gives that
+  Python a private copy of AppData, so the settings are not in
+  `AppData\Roaming\sipphone` and people could not find them ("cannot find the
+  path specified"). The installer now says so and shows the real folder
+  (`%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python…\LocalCache\Roaming\sipphone`).
+  When a regular Python is installed too it offers to use that one, and after
+  a switch to python.org Python it carries the existing settings over once.
+  Store Python keeps working; nothing is blocked. READ ME FIRST has a matching
+  troubleshooting entry, and its "without Install.bat" command names the
+  current wheel (it said 2.3.0).
+- Fixed: resuming a call in the instant a three-way conference was being
+  joined could leave two calls with the audio.
+- Extension files unchanged apart from the version number.
+
+## 2.7.0 — 2026-11-17 — several calls per line, dial from any line
+- **Every line makes and takes calls whatever the others are doing.** Until now
+  the page hid the Call button while any call was up, so another line could
+  answer but not dial. During a call: pick another line in the header, press
+  **New call**, or just type a number — the dial pad and the lists dial again
+  and Call appears next to Hang up. **Back to call** returns the pad to touch
+  tones.
+- **Up to three calls per line**, in and out. A second or third call rings on a
+  busy line (call waiting) with Answer / Decline; a fourth gets busy. Dialling
+  a fourth says "This line already has 3 calls".
+- **One call has the audio.** Placing, answering or resuming a call puts every
+  other talking call on hold — on the same line and on the others — and a call
+  you placed takes the audio when it is answered. Held calls stay on hold until
+  you resume them; hanging up the call on screen never touches them. A hold the
+  far end refuses or doesn't answer still frees the audio (the call is held on
+  this side).
+- The strip above the call lists every other call, on any line: caller, line
+  and state, with Resume / End or Answer / Decline. The header picker counts
+  each line's calls, e.g. "Sales demo (2)", and says when a line is full.
+- Warm transfer, Complete transfer and Conference act on the call on screen. A
+  consultation call belongs to the call it was placed for and counts as one of
+  the line's three. Starting another call parks a three-way: both legs go on
+  hold.
+- Mute stays with its call. Text-to-speech and scripts need a call that has the
+  audio. A call put on hold by another call says so in its own transcript block.
+- Fixed: the header picker's width limit for narrow windows never applied, so
+  the header could wrap; rows in the strip overflowed in the side panel.
+- Extension files unchanged apart from the version number.
+- Released as files only; first on GitHub as part of 2.7.1.
+
 ## 2.6.1 — 2026-11-16 — hide the Team view or the transcript
 - **Hide the Team view or the transcript.** Settings → *Use Telvoro as* has two
   new ticks (phone mode): *Show the Team view (presence)* — untick to remove

@@ -5,7 +5,7 @@ Everything referenced here is in this folder (`webstore/`) of the
 
 | File | Use |
 |---|---|
-| `telvoro-extension-2.6.1-webstore.zip` | the package you upload |
+| `telvoro-extension-2.7.1-webstore.zip` | the package you upload |
 | `screenshot-1-phone-1280x800.png`, `screenshot-2-presence-1280x800.png` | listing screenshots |
 | `promo-tile-440x280.png` | optional promo tile |
 | `LISTING.txt` | text to paste into the store forms |
@@ -24,7 +24,7 @@ zone → Change visibility → Public). The URL to give the store is:
 2. Accept the developer agreement, pay the one-time $5 fee, verify the email.
 
 ## 3. Upload and fill in the listing (about 15 minutes)
-1. **+ New item** → upload `telvoro-extension-2.6.1-webstore.zip`.
+1. **+ New item** → upload `telvoro-extension-2.7.1-webstore.zip`.
 2. **Store listing** tab (copy from `LISTING.txt`): Name, Summary, Description;
    category *Productivity → Communication*; language *English (US)*; upload
    the two screenshots.
@@ -42,7 +42,7 @@ It is built into the app's bridge allow-list and into `$StoreUrl` in
 `installer/install.ps1`, so Install.bat sends new users to the store and the
 store copy connects to the app on its own. Share the store link: *Add to
 Chrome* → pin Telvoro. Presence-only users are done; phone users also run
-Install.bat from `releases/2.6.1/Telvoro-2.6.1.zip`.
+Install.bat from `releases/2.7.1/Telvoro-2.7.1.zip`.
 
 ## Updating the extension later
 ```

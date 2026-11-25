@@ -1,11 +1,11 @@
 """Up to eight SIP accounts ("lines") on one computer.
 
 Each line is its own ``SIPPhone`` — its own registration, local SIP port and
-calls — but they share one microphone/speaker through a single
+up to three calls — but they share one microphone/speaker through a single
 ``AudioRouter``. Only one call has the audio at a time: placing, answering or
-resuming a call on one line puts the live calls on every other line on hold
-(the same rule a desk phone with line keys follows). A call that rings on one
-line while you talk on another rings normally with Answer / Decline.
+resuming a call on any line puts every other talking call, on that line and
+on the others, on hold (the same rule a desk phone with line keys follows). A
+call that rings while you talk rings normally with Answer / Decline.
 
 ``Lines`` looks like a ``SIPPhone`` to the rest of the app (web UI, scripts,
 settings): calls from every line are in ``calls``, actions are routed to the
@@ -23,7 +23,7 @@ import logging
 import threading
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .phone import Call, CallState, Config, SIPPhone
+from .phone import Call, CallState, Config, SIPPhone, focus_of
 
 log = logging.getLogger("sipphone.lines")
 
@@ -72,7 +72,9 @@ class Line:
         return {"n": self.n, "label": self.label, "name": p.cfg.display_name or p.cfg.username,
                 "account": f"{p.cfg.username}@{p.cfg.domain}", "registered": bool(p.registered),
                 "detail": getattr(p, "reg_detail", ""), "current": self.n == current,
-                "busy": any(c.state != CallState.ENDED for c in p.calls.values())}
+                "busy": any(c.state != CallState.ENDED for c in p.calls.values()),
+                "calls": sum(1 for c in p.calls.values() if c.state != CallState.ENDED),
+                "max_calls": getattr(p, "max_calls", 1)}
 
 
 def default_label(n: int, cfg: Config) -> str:
@@ -156,6 +158,8 @@ class Lines:
                 self._on_reg(ok, detail)
 
         phone.on_call_state, phone.on_incoming_call, phone.on_registration = st, inc, reg
+        # a call that takes the audio on this line holds the talking calls on every line
+        phone.hold_others_hook = self.hold_others
         with self._lock:
             self.lines[n] = line
         return line
@@ -279,22 +283,13 @@ class Lines:
         return out
 
     def _live(self) -> List[Call]:
-        return [c for c in self.calls.values() if c.state != CallState.ENDED]
+        return sorted((c for c in self.calls.values() if c.state != CallState.ENDED),
+                      key=lambda c: c.created)
 
     def focused_call(self) -> Optional[Call]:
-        """The call that has the audio, else the newest ringing one, else the newest live one."""
-        live = self._live()
-        talking = [c for c in live if c.state == CallState.CONNECTED and not c.local_hold
-                   and self.router is not None and c.call_id in self.router.foreground]
-        if not talking:
-            talking = [c for c in live if c.state in (CallState.CONNECTED, CallState.CALLING)
-                       and not c.local_hold]
-        if talking:
-            return talking[-1]
-        ringing = [c for c in live if c.state == CallState.INCOMING]
-        if ringing:
-            return ringing[-1]
-        return live[-1] if live else None
+        """The call that has the audio, else the newest one being placed, else
+        the newest ringing one, else the newest one on hold — across all lines."""
+        return focus_of(self.calls.values(), self.router)
 
     @property
     def active_call(self) -> Optional[Call]:
@@ -312,28 +307,18 @@ class Lines:
                 return line.phone, f.call_id
         return self.phone, None
 
-    def hold_others(self, keep: Optional[str] = None, keep_line: Optional[int] = None) -> List[Call]:
-        """Put every talking call on another line on hold (one call has the audio)."""
-        held = []
+    def hold_others(self, keep: Optional[str] = None) -> List[Call]:
+        """Put every talking call except `keep` on hold, on every line (one call
+        has the audio). Each line's phone calls this when a call takes over."""
+        held: List[Call] = []
         for line in list(self.lines.values()):
-            if keep_line is not None and line.n == keep_line:
-                continue
-            for c in list(line.phone.calls.values()):
-                if c.call_id == keep or c.state != CallState.CONNECTED or c.local_hold:
-                    continue
-                if self.router is not None:
-                    self.router.drop(c.call_id)          # silence it now, the re-INVITE follows
-                try:
-                    line.phone.hold(c.call_id)
-                    held.append(c)
-                except Exception as e:
-                    log.warning("could not hold %s on line %d: %s", c.remote_number, line.n, e)
+            held += line.phone.hold_others(keep)
         return held
 
     def call(self, number: str, role: str = "primary", line: Optional[int] = None) -> Call:
+        """Dial on the given line (default: the current one). Works while other
+        calls are up: they go on hold, on this line and the others."""
         target = self.lines.get(line or self.current) or self.lines[1]
-        if role == "primary":
-            self.hold_others(keep_line=target.n)
         return target.phone.call(number, role=role)
 
     def answer(self, call_id: Optional[str] = None) -> Call:
@@ -343,8 +328,7 @@ class Lines:
                 raise RuntimeError("no ringing call")
             call_id = ringing[-1].call_id
         phone, cid = self._owner(call_id)
-        self.hold_others(keep=cid, keep_line=self.line_of(cid).n if self.line_of(cid) else None)
-        return phone.answer(cid)
+        return phone.answer(cid)             # the phone holds whatever else is talking
 
     def reject(self, call_id: Optional[str] = None, status: int = 486) -> None:
         if not call_id:
@@ -365,9 +349,7 @@ class Lines:
 
     def resume(self, call_id: Optional[str] = None) -> None:
         phone, cid = self._owner(call_id)
-        line = self.line_of(cid) if cid else None
-        self.hold_others(keep=cid, keep_line=line.n if line else None)
-        phone.resume(cid)
+        phone.resume(cid)                    # the phone holds whatever else is talking
 
     def mute(self, on: bool = True, call_id: Optional[str] = None) -> None:
         phone, cid = self._owner(call_id)
@@ -384,13 +366,15 @@ class Lines:
     def _focused_phone(self) -> SIPPhone:
         return self._owner(None)[0]
 
+    def pair_of(self, call: Optional[Call]):
+        line = self.line_of(call) if call is not None else None
+        return line.phone.pair_of(call) if line else (None, None)
+
     def primary_call(self) -> Optional[Call]:
-        f = self.focused_call()
-        return self._focused_phone().primary_call() if f is not None else None
+        return self.pair_of(self.focused_call())[0]
 
     def consult_call(self) -> Optional[Call]:
-        f = self.focused_call()
-        return self._focused_phone().consult_call() if f is not None else None
+        return self.pair_of(self.focused_call())[1]
 
     def consult(self, number: str) -> Call:
         return self._focused_phone().consult(number)

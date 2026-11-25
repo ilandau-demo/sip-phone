@@ -44,7 +44,7 @@ class UIState:
         self.boards_path = os.path.join(os.path.dirname(os.path.abspath(contacts_path)), "boards.json")
         from .scripts import ScriptStore, ScriptRunner
         self.scripts = ScriptStore(os.path.join(os.path.dirname(os.path.abspath(contacts_path)), "scripts.json"))
-        self.script_runner = ScriptRunner(audio, lambda: bool(phone.active_call and phone.active_call.state == CallState.CONNECTED),
+        self.script_runner = ScriptRunner(audio, lambda: self.talking(),
                                           on_event=self.add)
         self.on_quit = None
         self._monitor = None
@@ -93,6 +93,9 @@ class UIState:
             if prev_state:
                 prev_state(call)
             key = call.call_id
+            if call.state == CallState.CONNECTED and call.local_hold and getattr(call, "auto_held", False):
+                call.auto_held = False
+                self.add("event", "On hold — another call has the audio", call=call)
             if self._last_state.get(key) == call.state:
                 return
             self._last_state[key] = call.state
@@ -382,20 +385,33 @@ class UIState:
                 "direction": call.direction,
                 "elapsed": self._fmt(time.time() - call.started_at) if call.started_at else "",
                 "codec": call.rtp.codec if call.rtp else "", "hold": call.on_hold,
-                "local_hold": call.local_hold, "muted": call.muted,
+                "local_hold": bool(getattr(call, "held", call.local_hold)), "muted": call.muted,
+                "role": getattr(call, "role", "primary"),
                 "transferring": call.transferring, "conference": call.in_conference}
+
+    def talking(self) -> bool:
+        """True while one call has the audio (connected and not on hold)."""
+        try:
+            f = self.phone.active_call
+        except Exception:
+            return False
+        return bool(f is not None and f.state == CallState.CONNECTED and not getattr(f, "held", f.local_hold))
 
     def snapshot(self, since: int) -> dict:
         p = self.phone
         call = p.primary_call() or p.active_call
         consult = p.consult_call()
+        if consult is call:
+            consult = None
         c = self._call_dict(call) if call else None
         if c and consult:
             c["consult"] = self._call_dict(consult)
-        # calls on other lines (held, ringing) — shown as a strip with their own buttons
+        # every other call, on this line or another (ringing, being placed, on hold) —
+        # shown as a strip with their own buttons; ringing ones first, then oldest first
         shown = {x.call_id for x in (call, consult) if x is not None}
-        others = [self._call_dict(x) for x in p.calls.values()
-                  if x.state != CallState.ENDED and x.call_id not in shown]
+        rest = [x for x in p.calls.values() if x.state != CallState.ENDED and x.call_id not in shown]
+        rest.sort(key=lambda x: (x.state != CallState.INCOMING, getattr(x, "created", 0)))
+        others = [self._call_dict(x) for x in rest]
         lines = p.info() if hasattr(p, "info") else []
         cur = p.phone if hasattr(p, "lines") else p
         tts = None
@@ -426,6 +442,7 @@ class UIState:
                 "reg_detail": getattr(cur, "reg_detail", "") if hasattr(p, "lines") else self.reg_detail,
                 "account": f"{cur.cfg.username}@{cur.cfg.domain}",
                 "lines": lines, "current_line": getattr(p, "current", 1), "other_calls": others,
+                "talking": self.talking(), "max_calls": getattr(cur, "max_calls", 1),
                 "expires_in": max(0, int(cur.register_expiry - time.time())) if cur.register_expiry else 0,
                 "call": c, "tts": tts, "events": ev, "audio": getattr(self.audio, "name", "none"),
                 "notifications": list(self.notifications[-5:]), "script": self.script_runner.status()}
@@ -928,16 +945,17 @@ def make_handler(state: UIState):
                     if cid:
                         p.hangup(cid)
                     else:
-                        # end every live leg of the call on screen (covers consult/conference),
-                        # never the held calls on other lines
+                        # end the call on screen and its consultation/conference leg —
+                        # never the other calls, which stay on hold
                         f = p.active_call
-                        owner = p.line_of(f).phone if (f is not None and hasattr(p, "line_of") and p.line_of(f)) else p
-                        for cl in [c for c in owner.calls.values() if c.state != _ph.CallState.ENDED]:
-                            owner.hangup(cl.call_id)
+                        legs = ([x for x in reversed(p.pair_of(f)) if x is not None] or [f]) if f is not None else []
+                        for cl in legs:
+                            if cl.state != _ph.CallState.ENDED:
+                                p.hangup(cl.call_id)
                 elif u.path == "/api/hold":
                     cid = body.get("call_id")
                     pc = (p.calls.get(cid) if cid else None) or p.primary_call() or p.active_call
-                    if pc and pc.local_hold:
+                    if pc and getattr(pc, "held", pc.local_hold):
                         p.resume(pc.call_id); state.add("event", "Resumed", call=pc)
                     else:
                         p.hold(pc.call_id if pc else None); state.add("event", "On hold", call=pc)
@@ -990,9 +1008,8 @@ def make_handler(state: UIState):
                     text = str(body.get("text", "")).strip()
                     if not hasattr(aud, "say"):
                         raise RuntimeError("Text-to-speech is off. Start with --tts piper")
-                    call = p.active_call
-                    if not call or call.state != CallState.CONNECTED:
-                        raise RuntimeError("Connect a call first, then speak")
+                    if not state.talking():
+                        raise RuntimeError("Connect or resume a call first, then speak")
                     if text:
                         aud.say(text)
                         state.add("said", text)

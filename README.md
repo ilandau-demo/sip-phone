@@ -81,11 +81,17 @@ footer shows "updates in 0.4 s (p95; platform 0.3 s)" and
 `/api/presence/health` carries `latency` (platform / engine / ack_rtt /
 render) and `channels`. If the stream drops the page polls until it is back.
 
-**Several accounts (2.6.0).** Up to 8 SIP accounts at once: Settings → *More
-phone lines* (lines 2–8, `[line2]` … `[line8]`), each registering on its own.
-Pick the line to dial from in the header. One call has the audio; answering or
-calling on another line holds the others, and calls ringing or held on other
-lines show in a strip with their own buttons.
+**Several accounts, several calls (2.7.0).** Up to 8 SIP accounts at once:
+Settings → *More phone lines* (lines 2–8, `[line2]` … `[line8]`), each
+registering on its own. Every line carries up to three calls, in and out,
+whatever the other lines are doing. One call has the audio: placing, answering
+or resuming a call holds every other talking call, on that line and the
+others, and they stay on hold until you resume them. Pick the line to dial from
+in the header; during a call press *New call* (or pick a line, or type a
+number) to dial another. Every other call — ringing, being placed or on hold —
+shows in a strip above the call with its own buttons. A second or third call
+rings on a busy line only if Call Waiting is on for that user in the phone
+system.
 
 **Services** (hunt groups, call centers, auto attendants…) appear as click-to-call
 entries under their kind, with a filter chip per kind on the Team tab. Settings →
@@ -303,6 +309,8 @@ sipphone/
   extension_sync.py  packages it: droppable zip (Downloads) + self-updating folder
   updater.py    in-app updates: sources, staging, lock, detached pip helper
 tests/test_flows.py        mock BroadSoft-style switch + end-to-end call tests
+tests/test_lines.py        several accounts: registration, calls across lines, Re-register
+tests/test_multicall.py    three calls per line, call waiting, one call with the audio
 tests/test_presence_engine.py  the presence engine against a mock XSI server
 tests/test_presence_mode.py  Team-view-only mode + presence API
 tests/test_auth.py         credential store, logins, probe()
@@ -311,6 +319,7 @@ tests/test_settings.py     config writer, settings API, live re-register, API lo
 tests/test_updater.py      update staging/sources/lock, real pip upgrade in a venv
 tests/ext_e2e.py           the Chrome extension driven in Chromium (needs port 8088 free)
 tests/teamonly_e2e.py      Team Presence Only in Chromium, no desktop app
+tests/multicall_e2e.py     several calls in the browser: New call, the strip of other calls
 ```
 
 ## Using it as a library

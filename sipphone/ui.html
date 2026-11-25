@@ -65,7 +65,9 @@
   .top { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
   .top .ghost { white-space: nowrap; }
   .reg { min-width: 0; }
-  @media (max-width: 480px) { .top { gap: 6px; } .top .gl { display: none; } #linepick { max-width: 150px; } .top h1 #ver { display: none; } }
+  @media (max-width: 480px) { .top { gap: 6px; } .top .gl { display: none; } .top #linepick { max-width: 150px; } .top h1 #ver { display: none; } }
+  @media (max-width: 380px) { .top #linepick { max-width: 124px; } }
+  body.embed .top #linepick { max-width: 200px; }     /* no title in the side panel: room for the name and its call count */
 
   /* ---- dialer ---- */
   .dialer { background: var(--panel); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
@@ -96,8 +98,8 @@
   .callstate.ringing .what { color: var(--ring); }
   .callstate.live .what { color: var(--line); }
   .hint { color: var(--ink-3); font-size: 13px; margin: 0; }
-  .incall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .incall button { height: 42px; border-radius: 10px; background: var(--bench); font-weight: 500; font-size: 14px; }
+  .incall { display: flex; gap: 8px; }
+  .incall button { flex: 1 1 0; min-width: 0; padding: 0 4px; white-space: nowrap; height: 42px; border-radius: 10px; background: var(--bench); font-weight: 500; font-size: 14px; }
   .incall button:hover { background: #DCE2DB; }
   .incall button.on { background: var(--ink); color: #fff; }
   .incall button[disabled] { opacity: .4; cursor: default; }
@@ -309,10 +311,12 @@
     font-size: 13px; background: #fff; }
   .ol-row.ringing { border-color: var(--line); background: var(--line-soft); animation: olpulse 1.2s ease-in-out infinite; }
   @keyframes olpulse { 50% { box-shadow: 0 0 0 3px var(--line-soft); } }
-  .ol-row .ol-line { font-weight: 600; white-space: nowrap; }
-  .ol-row .ol-who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
-  .ol-row .ol-st { color: var(--ink-3); white-space: nowrap; }
-  .ol-row button { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+  .ol-row .ol-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ol-row .ol-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+  .ol-row .ol-st { color: var(--ink-3); white-space: nowrap; font-size: 12px; display: flex; gap: 4px; min-width: 0; }
+  .ol-row .ol-st .ol-line { color: var(--ink-2); font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ol-row .ol-st .ol-what { flex: none; }
+  .ol-row button { padding: 4px 10px; font-size: 12px; border-radius: 8px; white-space: nowrap; flex: none; }
   .ol-row button.ans { background: var(--line); color: #fff; border: 0; }
   .ol-row button.end { background: transparent; color: var(--hang); border: 1px solid var(--hang); }
   .s-line { border: 1px solid var(--rule); border-radius: 10px; padding: 6px 10px; margin: 6px 0; }
@@ -543,6 +547,7 @@
       <button id="btn-hold">Hold</button>
       <button id="btn-mute">Mute</button>
       <button id="btn-transfer">Transfer</button>
+      <button id="btn-newcall" title="Place another call. The call you are on goes on hold.">New call</button>
     </div>
     <div class="consultbar" id="consultbar" hidden>
       <div class="consult-who" id="consult-who"></div>
@@ -1005,13 +1010,23 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   const showErr = m => { $('err').textContent = m; };
   const inCall = () => call && call.state !== 'ended';
   const connected = () => call && call.state === 'connected';
+  // Several calls at once: one has the audio (talkingNow), the rest are on hold.
+  // While a call has the audio the pad sends touch tones and the lists transfer;
+  // "New call" (dialMode) turns them back into a dialer. With nobody talking —
+  // the call is on hold, still ringing, or there is none — they always dial.
+  let talkingNow = false, dialMode = false, focusId = '', numberStale = false;
+  let lastLive = null, lastReg = null, lastDialing = null;
+  const dialing = () => !talkingNow || dialMode;
 
   // ---- dial pad ----
   $('keys').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const k = b.dataset.k;
-    if (connected()) { api('/api/dtmf', {digits: k}).catch(() => {}); }
-    else { number.value += k; number.focus(); }
+    if (!dialing()) { api('/api/dtmf', {digits: k}).catch(() => {}); }
+    else {
+      if (numberStale) { number.value = ''; numberStale = false; }     // the last number dialled: start over
+      number.value += k; number.focus(); syncCallLabel();
+    }
   });
   number.addEventListener('keydown', e => { if (e.key === 'Enter') doCall(); });
   // Call with nothing typed = redial: the last number you called (else the last call of any kind)
@@ -1026,20 +1041,57 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     syncCallLabel();
   };
   const syncCallLabel = () => {
-    const b = $('btn-call'), empty = !number.value.trim();
+    const b = $('btn-call'), empty = !number.value.trim() && !inCall();   // Redial only from idle
     b.textContent = empty && lastDialed ? 'Redial' : 'Call';
     b.title = empty && lastDialed ? `Redial ${lastDialed.name ? lastDialed.name + ' · ' : ''}${lastDialed.number}${lastDialed.line_label && (lastState && (lastState.lines || []).length > 1) ? ' on ' + lastDialed.line_label : ''}` : '';
   };
+  // Every way of dialling goes through here. Calls already up go on hold (the app does that).
+  const placeCall = body => api('/api/call', body).then(() => { numberStale = true; setDialMode(false); }).catch(() => {});
   const doCall = () => {
     let n = number.value.trim(), body = null;
-    if (!n && lastDialed) {
+    if (numberStale && inCall()) n = '';                               // that number is already being called
+    if (!n && lastDialed && !inCall()) {
       n = lastDialed.number; number.value = n; body = {number: n};
       if (lastDialed.line && (lastState && (lastState.lines || []).some(l => l.n === lastDialed.line))) body.line = lastDialed.line;
     }
-    if (n) api('/api/call', body || {number: n}).catch(() => {});
+    if (n) placeCall(body || {number: n}); else number.focus();
+  };
+  // "New call" during a call: the pad and the lists dial again; the call goes on hold once you call
+  const setDialMode = (on, clear) => {
+    dialMode = !!on && talkingNow;
+    if (dialMode && clear) { number.value = ''; numberStale = false; number.focus(); }
+    syncDialUI();
+  };
+  const syncDialUI = () => {
+    const live = inCall(), st = call ? call.state : '';
+    const showCall = !live || (st !== 'incoming' && dialing());
+    const bc = $('btn-call'), bh = $('btn-hang'), nb = $('btn-newcall');
+    bc.hidden = !showCall; bc.disabled = !registered; bc.className = 'call' + (live ? '' : ' wide');
+    $('btn-answer').hidden = st !== 'incoming';
+    bh.hidden = !live;
+    bh.className = 'hang' + (st === 'incoming' || (live && showCall) ? '' : ' wide');
+    bh.textContent = st === 'calling' ? 'Cancel' : st === 'incoming' ? 'Decline' : 'Hang up';
+    nb.hidden = !talkingNow; nb.className = dialMode ? 'on' : ''; nb.textContent = dialMode ? 'Back to call' : 'New call';
+    $('hint').textContent = !talkingNow ? '' : dialMode ? 'Dial a number. The call you are on goes on hold.'
+                                                        : 'Keys now send touch tones to the call.';
+    syncCallLabel();
+    if (dialing() !== lastDialing) {                                   // lists switch between Call and Transfer
+      lastDialing = dialing();
+      setTimeout(() => {
+        renderContacts(); if (!$('recent').hidden) loadRecent();
+        teamSig = '';
+        if (lastTeam) { if (curTab === 'team') renderTeam(lastTeam); else if (curTab.startsWith('board:')) renderBoard(); }
+      }, 0);
+    }
   };
   $('btn-call').onclick = doCall;
-  number.addEventListener('input', syncCallLabel);
+  $('btn-newcall').onclick = () => setDialMode(!dialMode, true);
+  number.addEventListener('input', () => {
+    numberStale = false;
+    if (talkingNow && !dialMode && number.value.trim()) setDialMode(true);   // typing a number means: a new call
+    else syncCallLabel();
+  });
+  number.addEventListener('focus', () => { if (numberStale) number.select(); });
   refreshRedial();
   $('btn-answer').onclick = () => api('/api/answer').catch(() => {});
   $('btn-hang').onclick = () => api('/api/hangup').catch(() => {});
@@ -1110,7 +1162,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const box = $('phrases'); box.innerHTML = '';
     for (const p of phrases) {
       const b = document.createElement('button'); b.textContent = p; b.title = p;
-      b.onclick = () => { text.value = p; autosize(); if (connected()) speak(); else text.focus(); };
+      b.onclick = () => { text.value = p; autosize(); if (talkingNow) speak(); else text.focus(); };
       box.appendChild(b);
     }
     const e = document.createElement('button'); e.className = 'edit'; e.textContent = 'Edit phrases';
@@ -1132,7 +1184,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const edit = box.querySelector('.edit');
     for (const sc of scripts) {
       const b = document.createElement('button'); b.className = 'script'; b.textContent = '▶ ' + sc.name; b.title = sc.steps.length + ' lines — play on the active call';
-      b.disabled = !connected() || !tts;
+      b.disabled = !talkingNow || !tts;
       b.onclick = () => api('/api/scripts/run', {id: sc.id}).catch(e => { $('err').textContent = e.message; });
       box.insertBefore(b, edit);
     }
@@ -1249,9 +1301,9 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       info.append(nm, meta);
       const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
       dial.title = 'Call ' + (h.name || h.number); dial.setAttribute('aria-label', 'Call back ' + h.number);
-      dial.disabled = !registered || inCall();
+      dial.disabled = !registered || !dialing();
       // call back on the line the call was on
-      dial.onclick = () => { number.value = h.number; api('/api/call', multi && h.line ? {number: h.number, line: h.line} : {number: h.number}).catch(() => {}); };
+      dial.onclick = () => { number.value = h.number; placeCall(multi && h.line ? {number: h.number, line: h.line} : {number: h.number}); };
       row.append(ar, info, dial);
       box.appendChild(row);
     }
@@ -1336,7 +1388,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       };
       if (presenceMode) {
         // Team view only: nothing to call with.
-      } else if (connected()) {
+      } else if (!dialing()) {
         // On an active call: move this call to / with the teammate.
         if (num) {
           act('Transfer', '', () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{}), 'Blind transfer to ' + u.name);
@@ -1351,7 +1403,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
         }
         if (num && registered) {
           const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
-          dial.title = 'Call ' + u.name; dial.onclick = () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); };
+          dial.title = 'Call ' + u.name; dial.onclick = () => { number.value = num; placeCall({number: num}); };
           acts.appendChild(dial);
         }
       }
@@ -1368,8 +1420,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
         const side = document.createElement('div'); side.className = 'side';
         if (!presenceMode && num) {
           const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG; dial.title = 'Call ' + sv.name;
-          if (connected()) { dial.title = 'Transfer to ' + sv.name; dial.onclick = () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{}); }
-          else { dial.disabled = !registered; dial.onclick = () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); }; }
+          if (!dialing()) { dial.title = 'Transfer to ' + sv.name; dial.onclick = () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{}); }
+          else { dial.disabled = !registered; dial.onclick = () => { number.value = num; placeCall({number: num}); }; }
           side.appendChild(dial);
         }
         row.append(who, side);
@@ -1386,8 +1438,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       if (!presenceMode) {
         const dial = document.createElement('button'); dial.className = 'dial'; dial.innerHTML = PHONE_SVG;
         dial.title = 'Call ' + c.name; dial.setAttribute('aria-label', 'Call ' + c.name);
-        dial.disabled = !registered || inCall();
-        dial.onclick = () => { number.value = c.number; api('/api/call', {number: c.number}).catch(() => {}); };
+        dial.disabled = !registered || !dialing();
+        dial.onclick = () => { number.value = c.number; placeCall({number: c.number}); };
         side.appendChild(dial);
       }
       row.append(info, side);
@@ -1461,7 +1513,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const peopleOff = teamKinds.size && !teamStatuses.size;
     const shown = peopleOff ? [] : j.users.filter(u => personMatches(u, teamQ) && (!teamStatuses.size || teamStatuses.has(u.status)) && (!teamDept || (u.department || '').trim() === teamDept));
     // re-render only when something visible changed (large directories, 1 s polls)
-    const sig = JSON.stringify([teamQ, [...teamStatuses], [...teamKinds], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, connected(), Object.keys(watchRules),
+    const sig = JSON.stringify([teamQ, [...teamStatuses], [...teamKinds], teamDept, j.stale, j.connected, j.last_error, j.ready, registered, dialing(), Object.keys(watchRules),
       shown.map(u => [u.user_id, u.status, u.with_number, u.with_name, u.stale, u.monitor]), (j.services || []).map(x => [x.user_id, x.name])]);
     if (sig === teamSig) {
       box.querySelectorAll('.dur2[data-since]').forEach(d => { d.textContent = relTime(+d.dataset.since); });
@@ -1605,8 +1657,8 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const num = p.number || p.extension;
     if (!presenceMode && num && p.monitor !== 'none') {
       const mk = (t, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.onclick = () => { fn(); $('pdlg').close(); }; acts.appendChild(b); };
-      if (connected()) { mk('Transfer', () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{})); mk('Conference', () => api('/api/conference', {target: num}).catch(()=>{})); }
-      else if (registered) mk('Call', () => { number.value = num; api('/api/call', {number: num}).catch(()=>{}); });
+      if (!dialing()) { mk('Transfer', () => api('/api/transfer', {target: num, mode: 'blind'}).catch(()=>{})); mk('Conference', () => api('/api/conference', {target: num}).catch(()=>{})); }
+      else if (registered) mk('Call', () => { number.value = num; placeCall({number: num}); });
     }
     $('pdlg').showModal();
     if (focusWatch) { const f = opts.querySelector('input'); if (f) f.focus(); }
@@ -2345,13 +2397,16 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     const multi = ls.length > 1 && !presenceMode;
     pick.hidden = !multi;
     if (!multi) return;
-    const sig = JSON.stringify(ls.map(l => [l.n, l.label, l.registered, l.busy, l.current]));
+    const sig = JSON.stringify(ls.map(l => [l.n, l.label, l.registered, l.calls || 0, l.current]));
     if (sig !== linePickSig && document.activeElement !== pick) {
       linePickSig = sig; pick.innerHTML = '';
       for (const l of ls) {
         const o = document.createElement('option'); o.value = l.n;
-        o.textContent = `${l.registered ? '●' : '○'} ${l.label}${l.busy ? ' · on a call' : ''}`;
-        o.title = `${l.account} — ${l.registered ? 'registered' : 'not registered: ' + (l.detail || '')}`;
+        const nc = l.calls || (l.busy ? 1 : 0);
+        const full = l.max_calls && nc >= l.max_calls;
+        o.textContent = `${l.registered ? '●' : '○'} ${l.label}${nc ? ` (${nc}${full ? ', full' : ''})` : ''}`;
+        o.title = `${l.account} — ${l.registered ? 'registered' : 'not registered: ' + (l.detail || '')}`
+                + (nc ? ` — ${nc} call${nc > 1 ? 's' : ''}${full ? ', the most this line carries' : ''}` : '');
         pick.appendChild(o);
       }
     }
@@ -2366,6 +2421,7 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     try { await api('/api/lines/select', {n: +$('linepick').value}); } catch (e) {}
     linePickSig = '';
     refreshRedial();
+    if (talkingNow) setDialMode(true, true);          // choosing a line during a call: dial on it
   };
   let otherSig = '';
   const renderOtherLines = list => {
@@ -2375,18 +2431,23 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     box.innerHTML = ''; box.hidden = !list.length;
     for (const c of list) {
       const row = document.createElement('div'); row.className = 'ol-row' + (c.state === 'incoming' ? ' ringing' : '');
-      const ln = document.createElement('span'); ln.className = 'ol-line'; ln.textContent = c.line || 'Line';
-      const who = document.createElement('span'); who.className = 'ol-who'; who.textContent = idNum(c.name, c.number) || c.number;
-      const st = document.createElement('span'); st.className = 'ol-st';
+      // caller on top; under it the line it is on and what it is doing
+      const who = document.createElement('div'); who.className = 'ol-who'; who.textContent = idNum(c.name, c.number) || c.number;
+      who.title = who.textContent;
+      const st = document.createElement('span'); st.className = 'ol-what';
       st.textContent = c.state === 'incoming' ? 'Ringing' : c.state === 'calling' ? 'Calling…' : c.local_hold ? 'On hold · ' + c.elapsed : 'Connected · ' + c.elapsed;
-      row.append(ln, who, st);
-      const btn = (t, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.className = cls; b.onclick = fn; row.appendChild(b); };
+      const sub = document.createElement('div'); sub.className = 'ol-st';
+      if (c.line) { const ln = document.createElement('span'); ln.className = 'ol-line'; ln.textContent = c.line; ln.title = c.line; sub.append(ln, '·'); }
+      sub.append(st);
+      const main = document.createElement('div'); main.className = 'ol-main'; main.append(who, sub);
+      row.append(main);
+      const btn = (t, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.className = cls; b.onclick = fn; row.appendChild(b); return b; };
       if (c.state === 'incoming') {
         btn('Answer', 'ans', () => api('/api/answer', {call_id: c.id}).catch(() => {}));
         btn('Decline', 'end', () => api('/api/reject', {call_id: c.id}).catch(() => {}));
       } else if (c.state === 'connected') {
         btn(c.local_hold ? 'Resume' : 'Hold', '', () => api('/api/hold', {call_id: c.id}).catch(() => {}));
-        btn('Hang up', 'end', () => api('/api/hangup', {call_id: c.id}).catch(() => {}));
+        btn('End', 'end', () => api('/api/hangup', {call_id: c.id}).catch(() => {})).title = 'Hang up this call';
       } else {
         btn('Cancel', 'end', () => api('/api/hangup', {call_id: c.id}).catch(() => {}));
       }
@@ -2396,6 +2457,9 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
   let awaitingRecheck = 0;
   const render = s => {
     registered = s.registered; call = s.call; tts = s.tts;
+    talkingNow = !!s.talking;
+    if ((call ? call.id : '') !== focusId) { focusId = call ? call.id : ''; dialMode = false; }   // another call is on screen
+    if (!talkingNow) dialMode = false;
     presenceMode = s.mode === 'presence';
     document.body.classList.toggle('presence', presenceMode);
     if (s.update !== undefined) { updInfo = s.update; }
@@ -2429,15 +2493,17 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
       cs.querySelector('.who').textContent = who; cs.querySelector('.what').textContent = what;
     }
     const live = inCall();
-    const wasLive = $('btn-call').hidden, wasReg = !$('btn-call').disabled;
-    if (wasLive !== live || wasReg !== s.registered) setTimeout(() => { renderContacts(); if (!$('recent').hidden) loadRecent(); }, 0);
+    if (lastLive !== live || lastReg !== s.registered) {
+      lastLive = live; lastReg = s.registered;
+      setTimeout(() => { renderContacts(); if (!$('recent').hidden) loadRecent(); }, 0);
+    }
     $('incall').hidden = !connected();
     renderOtherLines(s.other_calls || []);
     const consult = call && call.consult;
     $('consultbar').hidden = !consult;
     if (consult) {
       const nm = idNum(consult.name, consult.number) || consult.number;
-      const st = consult.state === 'calling' ? 'Calling ' : consult.conference ? 'In conference with ' : 'Consulting ';
+      const st = consult.state === 'calling' ? 'Calling ' : consult.conference ? 'In conference with ' : consult.local_hold ? 'On hold: ' : 'Consulting ';
       $('consult-who').innerHTML = st + '<b></b>';
       $('consult-who').querySelector('b').textContent = nm;
       const ready = consult.state === 'connected';
@@ -2491,16 +2557,10 @@ if (new URLSearchParams(location.search).has('embed')) document.body.classList.a
     if (presenceMode && !teamTab && !curTab.startsWith('board:')) showTab(visibleTabs()[0] || 'team');
     if (s.version) { $('ver').textContent = 'v' + s.version; if (!$('s-cur-ver').textContent) $('s-cur-ver').textContent = s.version; }
     if (s.stt) $('stt-on').checked = s.stt.enabled;
-    $('btn-call').hidden = live; $('btn-call').disabled = !s.registered;
-    $('btn-answer').hidden = !(call && call.state === 'incoming');
-    $('btn-hang').hidden = !live;
-    $('btn-hang').className = 'hang' + (call && call.state === 'incoming' ? '' : ' wide');
-    $('btn-hang').textContent = call && call.state === 'calling' ? 'Cancel' : call && call.state === 'incoming' ? 'Decline' : 'Hang up';
-    $('hint').textContent = connected() ? 'Keys now send touch tones to the call.'
-                          : '';
-    if (s.events.some(e => e.text.startsWith('Call ended')) && !live) { number.value = ''; if (!$('recent').hidden) setTimeout(loadRecent, 300); }
+    syncDialUI();
+    if (s.events.some(e => e.text.startsWith('Call ended')) && !live) { number.value = ''; numberStale = false; syncCallLabel(); if (!$('recent').hidden) setTimeout(loadRecent, 300); }
 
-    const can = connected() && !!tts;
+    const can = talkingNow && !!tts;
     $('btn-speak').disabled = !can;
     const sc = s.script;
     $('scriptbar').hidden = !(sc && sc.running);

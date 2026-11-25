@@ -89,12 +89,48 @@ class Call:
     muted: bool = False
     transferring: Optional[str] = None   # target while a REFER is in flight
     role: str = "primary"                # primary | consult
+    parent: Optional[str] = None         # consult: the call_id of the call it was placed for
     in_conference: bool = False
+    hold_pending: bool = False           # our hold re-INVITE is on its way
+    auto_held: bool = False              # put on hold because another call took the audio
+    created: float = field(default_factory=time.time)
     _src_addr: Optional[tuple] = None
 
     @property
     def remote_number(self) -> str:
         return Address(self.remote_uri).user or self.remote_uri
+
+    @property
+    def held(self) -> bool:
+        """On hold from our side, or about to be."""
+        return self.local_hold or self.hold_pending
+
+
+# How many calls one line carries at once (ringing, being placed, talking or on hold).
+MAX_CALLS_PER_LINE = 3
+
+
+def focus_of(calls, router=None) -> Optional[Call]:
+    """The call the screen and the no-argument actions are about.
+
+    Only one call has the audio. That one comes first; with nobody talking it
+    is the newest call being placed, then the newest one ringing, then the
+    newest one on hold."""
+    live = sorted((c for c in calls if c.state != CallState.ENDED), key=lambda c: c.created)
+    if not live:
+        return None
+    fg = router.foreground if router is not None else None
+    talking = [c for c in live if c.state == CallState.CONNECTED and not c.held
+               and (fg is None or c.call_id in fg)]
+    if not talking:
+        talking = [c for c in live if c.state == CallState.CONNECTED and not c.held]
+    if talking:
+        return talking[-1]
+    for state in (CallState.CALLING, CallState.INCOMING):
+        some = [c for c in live if c.state == state]
+        if some:
+            return some[-1]
+    return live[-1]
 
 
 class _Pending:
@@ -130,23 +166,29 @@ def _mix_frames(frames):
 
 
 class AudioRouter:
-    """Routes one real mic/speaker across up to two calls.
+    """Routes one real mic/speaker across every call (all lines share one).
 
     - foreground: the call_ids that currently exchange real audio. A held or
       background call is not foreground, so its RTP sends silence and its
       received audio is dropped (and it never steals mic frames).
     - conference: when True, every foreground call hears the mic plus the other
       legs, and the speaker plays all legs mixed — a local 3-way bridge.
+    - owners: the call (or conference pair) that most recently took the audio.
+      A resume that completes after another call took over is put back on hold.
     """
 
     def __init__(self, audio) -> None:
         self.audio = audio
         self.foreground = set()
+        self.owners = set()
         self.conference = False
         self._rx = {}
         self._mic_cache = None
         self._mic_t = 0.0
         self._lock = threading.Lock()
+        # taking the audio and finishing a resume must not interleave, or a
+        # resume that lands in between leaves two calls talking
+        self.turn = threading.RLock()
 
     def _read_mic(self):
         now = time.monotonic()
@@ -177,6 +219,9 @@ class AudioRouter:
             if self.audio:
                 self.audio.write_frame(mixed)
         return sink
+
+    def claim(self, *call_ids):
+        self.owners = set(c for c in call_ids if c)
 
     def set_foreground(self, *call_ids):
         self.foreground = set(c for c in call_ids if c)
@@ -220,6 +265,10 @@ class SIPPhone:
         self.calls: Dict[str, Call] = {}
         # Team-view-only mode: the line is never registered and calls are refused.
         self.presence_only = False
+        # several calls on this line: one has the audio, the rest are on hold
+        self.max_calls = MAX_CALLS_PER_LINE
+        # with several lines, Lines points this at all of them (hold across lines)
+        self.hold_others_hook: Optional[Callable[[Optional[str]], object]] = None
         self._pending: Dict[tuple, _Pending] = {}
         self._auth_cache: Dict[str, Dict[str, str]] = {}   # realm -> challenge
         self._nc: Dict[str, int] = {}
@@ -598,21 +647,22 @@ class SIPPhone:
             return self._pending.get((req.call_id, req.cseq[0], req.cseq[1]))
 
     # ------------------------------------------------------------------ outbound call
-    def call(self, number: str, role: str = "primary") -> Call:
+    def _check_room(self) -> None:
+        if len(self.live_calls()) >= self.max_calls:
+            raise RuntimeError(f"This line already has {self.max_calls} calls — hang one up first")
+
+    def call(self, number: str, role: str = "primary", parent: Optional[str] = None) -> Call:
         if self.presence_only:
             raise RuntimeError("This copy is set to Team view only — switch the mode in Settings to make calls")
-        with self._lock:
-            active = [c for c in self.calls.values() if c.state != CallState.ENDED]
-            if role == "primary" and active:
-                raise RuntimeError("a call is already in progress")
-            if role == "consult" and len(active) >= 2:
-                raise RuntimeError("already handling two calls")
+        self._check_room()
+        if role == "primary":
+            self._hold_others(None)        # dialling takes the audio: whatever was talking goes on hold
         if "@" not in number:
             target = f"sip:{number}@{self.cfg.domain}"
         else:
             target = number if number.startswith("sip") else f"sip:{number}"
         call = Call(call_id=f"{uuid.uuid4()}@{self.local_ip}", local_tag=rand_token(10),
-                    direction="out", remote_uri=target, role=role)
+                    direction="out", remote_uri=target, role=role, parent=parent if role == "consult" else None)
         call.rtp = self._new_rtp(call.call_id)
         call.local_sdp = sdp.build_offer(self.local_ip, call.rtp.local_port, self.cfg.codecs)
         me = Address(self.aor, self.cfg.display_name)
@@ -718,9 +768,8 @@ class SIPPhone:
         if self.presence_only:
             self._respond(req, 603, addr)      # not a phone right now
             return
-        busy = [c for c in self.calls.values() if c.state not in (CallState.ENDED,)]
-        if busy:
-            self._respond(req, 486, addr)
+        if len(self.live_calls()) >= self.max_calls:
+            self._respond(req, 486, addr)      # the line is full
             return
         if req.content_type != "application/sdp" or not req.body:
             self._respond(req, 488, addr)
@@ -853,19 +902,33 @@ class SIPPhone:
         self._reinvite(self._get_call(call_id, CallState.CONNECTED), hold=True)
 
     def resume(self, call_id: Optional[str] = None) -> None:
-        self._reinvite(self._get_call(call_id, CallState.CONNECTED), hold=False)
+        call = self._get_call(call_id, CallState.CONNECTED)
+        self._take_audio(call)             # whatever else is talking goes on hold first
+        self._reinvite(call, hold=False)
 
     def mute(self, on: bool = True, call_id: Optional[str] = None) -> None:
         call = self._get_call(call_id, CallState.CONNECTED)
         call.muted = on
         if self.audio is not None and hasattr(self.audio, "mic_muted"):
-            self.audio.mic_muted = on      # TTS backend: mute the mic, keep typed speech
+            # TTS backend: mute the mic, keep typed speech. One microphone for every
+            # call, so it only follows the call that has the audio (see _sync_mute).
+            if not call.held and (self.router is None or call.call_id in self.router.foreground):
+                self.audio.mic_muted = on
         elif call.rtp:
             call.rtp.muted = on
         self._notify(call)
 
+    def _sync_mute(self, call: Call) -> None:
+        """The call that just got the audio brings its own mute setting with it."""
+        if self.audio is not None and hasattr(self.audio, "mic_muted"):
+            self.audio.mic_muted = call.muted
+
     def _reinvite(self, call: Call, hold: bool) -> None:
-        """Send a re-INVITE with a=sendonly (hold) or a=sendrecv (resume)."""
+        """Send a re-INVITE with a=sendonly (hold) or a=sendrecv (resume).
+
+        A hold takes effect on our side at once — the call leaves the audio —
+        and stays in effect even if the far end refuses or never answers the
+        re-INVITE, so another call can always take over."""
         if not call.rtp:
             raise RuntimeError("no media on this call")
         direction = "sendonly" if hold else "sendrecv"
@@ -873,6 +936,46 @@ class SIPPhone:
         req.headers.add("Content-Type", "application/sdp")
         req.body = sdp.build_offer(self.local_ip, call.rtp.local_port, self.cfg.codecs, direction=direction)
         call.local_sdp = req.body
+        if hold:
+            call.hold_pending = True
+            if self.router:
+                self.router.drop(call.call_id)
+            self._leave_conference(call)
+            self._notify(call)
+
+        def settle(ok: bool, why: str = "") -> None:
+            if call.state != CallState.CONNECTED:
+                call.hold_pending = False
+                return
+            if hold:
+                call.hold_pending = False
+                call.local_hold = True
+                if call.rtp:
+                    call.rtp.direction = "sendonly"
+                if ok:
+                    log.info("call %s: placed on hold", call.remote_number)
+                else:
+                    log.warning("call %s: the far end did not confirm the hold (%s); held on this side",
+                                call.remote_number, why)
+            elif ok:
+                with (self.router.turn if self.router else threading.RLock()):
+                    if self.router and self.router.owners and call.call_id not in self.router.owners:
+                        # another call took the audio while this resume was on its way
+                        log.info("call %s: resumed too late, back on hold", call.remote_number)
+                        call.auto_held = True
+                        self._reinvite(call, hold=True)
+                        return
+                    call.local_hold = False
+                    call.auto_held = False
+                    if call.rtp:
+                        call.rtp.direction = "sendrecv"
+                    if self.router:
+                        self.router.add_foreground(call.call_id)
+                self._sync_mute(call)
+                log.info("call %s: resumed", call.remote_number)
+            else:
+                log.warning("call %s: resume refused (%s)", call.remote_number, why)
+            self._notify(call)
 
         def on_response(resp: Response, p: _Pending) -> None:
             if resp.status < 200:
@@ -880,23 +983,17 @@ class SIPPhone:
             if resp.status in (401, 407):
                 self._ack(call, resp, p.request)
                 if not self._handle_challenge(resp, p):
-                    log.warning("re-INVITE auth failed")
+                    settle(False, "authentication failed")
                 return
             self._ack(call, resp, p.request)
             if 200 <= resp.status < 300:
-                call.local_hold = hold
-                if call.rtp:
-                    call.rtp.direction = "sendonly" if hold else "sendrecv"
-                if self.router:
-                    self.router.drop(call.call_id) if hold else self.router.add_foreground(call.call_id)
                 if resp.content_type == "application/sdp" and resp.body:
                     self._apply_remote_sdp(call, resp.body)
-                log.info("call %s: %s", call.remote_number, "placed on hold" if hold else "resumed")
+                settle(True)
             else:
-                log.warning("re-INVITE rejected: %d %s", resp.status, resp.reason)
-            self._notify(call)
+                settle(False, f"{resp.status} {resp.reason}")
 
-        self._send_request(req, on_response=on_response)
+        self._send_request(req, on_response=on_response, on_timeout=lambda: settle(False, "no answer"))
 
     def transfer(self, target: str, call_id: Optional[str] = None) -> None:
         """Blind transfer (RFC 3515 REFER). The call ends once the far end reports success."""
@@ -940,41 +1037,105 @@ class SIPPhone:
             self._send_bye(call)
             self._end_call(call, f"transferred to {Address(call.transferring).user or call.transferring}")
 
-    # ---- second line: consult, attended transfer, conference ----
-    def primary_call(self) -> Optional[Call]:
+    # ---- several calls on one line: one has the audio, the rest are on hold ----
+    def live_calls(self) -> List[Call]:
+        """Every call that hasn't ended, oldest first."""
         with self._lock:
-            live = [c for c in self.calls.values() if c.state != CallState.ENDED and c.role == "primary"]
-        return live[-1] if live else None
+            return sorted((c for c in self.calls.values() if c.state != CallState.ENDED),
+                          key=lambda c: c.created)
+
+    def focus_call(self) -> Optional[Call]:
+        """The call this line's no-argument actions are about (see focus_of)."""
+        return focus_of(self.live_calls(), self.router)
+
+    def pair_of(self, call: Optional[Call]) -> Tuple[Optional[Call], Optional[Call]]:
+        """(call, its consultation call). A consultation call belongs to the call
+        it was placed for; any other call can have one."""
+        if call is None:
+            return None, None
+        with self._lock:
+            if call.role == "consult":
+                parent = self.calls.get(call.parent or "")
+                if parent is not None and parent.state == CallState.ENDED:
+                    parent = None
+                return parent, call
+            kids = [c for c in self.calls.values() if c.state != CallState.ENDED
+                    and c.role == "consult" and c.parent == call.call_id]
+        return call, (kids[-1] if kids else None)
+
+    def hold_others(self, keep: Optional[str] = None) -> List[Call]:
+        """Put every talking call on this line except `keep` on hold."""
+        held = []
+        for c in self.live_calls():
+            if c.call_id == keep or c.state != CallState.CONNECTED or c.held:
+                continue
+            try:
+                c.auto_held = True
+                self._reinvite(c, hold=True)
+                held.append(c)
+            except Exception as e:
+                c.auto_held = False
+                log.warning("could not hold %s: %s", c.remote_number, e)
+        return held
+
+    def _hold_others(self, keep: Optional[str] = None) -> None:
+        (self.hold_others_hook or self.hold_others)(keep)
+
+    def _take_audio(self, call: Call) -> None:
+        """`call` is about to have the audio: everything else that is talking, on
+        any line, goes on hold."""
+        if not self.router:
+            return self._hold_others(call.call_id)
+        with self.router.turn:
+            # claim first: a resume that completes from here on sees the new
+            # owner and goes back on hold; one that completed before is talking
+            # and is held by the sweep below
+            self.router.claim(call.call_id)
+            self._hold_others(call.call_id)
+
+    def _leave_conference(self, call: Call) -> None:
+        """A leg that is held or ends takes the three-way apart."""
+        if not call.in_conference:
+            return
+        with self._lock:
+            for c in self.calls.values():
+                if c.in_conference and (c is call or c.parent == call.call_id or c.call_id == call.parent):
+                    c.in_conference = False
+        if self.router:
+            self.router.conference = False
+
+    # ---- consult, attended transfer, conference ----
+    def primary_call(self) -> Optional[Call]:
+        return self.pair_of(self.focus_call())[0]
 
     def consult_call(self) -> Optional[Call]:
-        with self._lock:
-            live = [c for c in self.calls.values() if c.state != CallState.ENDED and c.role == "consult"]
-        return live[-1] if live else None
+        return self.pair_of(self.focus_call())[1]
 
     def consult(self, number: str) -> Call:
         """Start an attended (warm) transfer: hold the current call and dial the
         target so you can talk before completing the transfer or conferencing."""
-        primary = self.primary_call()
+        primary, existing = self.pair_of(self.focus_call())
         if not primary or primary.state != CallState.CONNECTED:
             raise RuntimeError("no connected call to transfer")
-        if self.consult_call():
+        if existing:
             raise RuntimeError("a consultation call is already in progress")
-        self._reinvite(primary, hold=True)
-        return self.call(number, role="consult")
+        self._check_room()
+        if not primary.held:
+            self._reinvite(primary, hold=True)
+        return self.call(number, role="consult", parent=primary.call_id)
 
     def cancel_consult(self) -> None:
         """Drop the consultation call and return to the held party."""
-        consult = self.consult_call()
+        primary, consult = self.pair_of(self.focus_call())
         if consult:
             self.hangup(consult.call_id)
-        primary = self.primary_call()
-        if primary and primary.local_hold:
-            self._reinvite(primary, hold=False)
+        if primary and primary.state == CallState.CONNECTED and primary.held:
+            self.resume(primary.call_id)
 
     def complete_transfer(self) -> None:
         """Finish an attended transfer: connect the held party to the consulted
         party (REFER with Replaces), then drop both of our legs."""
-        primary, consult = self.primary_call(), self.consult_call()
+        primary, consult = self.pair_of(self.focus_call())
         if not primary or not consult:
             raise RuntimeError("need a held call and a consultation call")
         # Refer the primary to the consult's remote party, replacing the consult dialog.
@@ -1010,15 +1171,16 @@ class SIPPhone:
     def conference(self, number: Optional[str] = None) -> None:
         """Three-way conference. With `number`, dials it and bridges once it
         answers; with an existing consultation call, bridges that immediately."""
-        primary = self.primary_call()
+        primary, consult = self.pair_of(self.focus_call())
         if not primary or primary.state not in (CallState.CONNECTED,):
             raise RuntimeError("no connected call to conference")
-        consult = self.consult_call()
         if consult is None:
             if not number:
                 raise RuntimeError("no one to conference in")
-            self._reinvite(primary, hold=True)
-            consult = self.call(number, role="consult")
+            self._check_room()
+            if not primary.held:
+                self._reinvite(primary, hold=True)
+            consult = self.call(number, role="consult", parent=primary.call_id)
             consult._conf_on_answer = True  # type: ignore[attr-defined]
             return
         self._bridge(primary, consult)
@@ -1026,8 +1188,13 @@ class SIPPhone:
     def _bridge(self, primary: Call, consult: Call) -> None:
         if consult.state != CallState.CONNECTED:
             raise RuntimeError("the other party hasn't answered yet")
-        if primary.local_hold:
-            self._reinvite(primary, hold=False)
+        # the pair takes the audio together (one of the two is the call on screen,
+        # so nothing else is talking)
+        if self.router:
+            self.router.claim(primary.call_id, consult.call_id)
+        for leg in (primary, consult):
+            if leg.held:
+                self._reinvite(leg, hold=False)
         if self.router:
             self.router.set_foreground(primary.call_id, consult.call_id)
             self.router.conference = True
@@ -1080,13 +1247,12 @@ class SIPPhone:
     def _connected(self, call: Call) -> None:
         call.state = CallState.CONNECTED
         call.started_at = time.time()
+        # A call that connects takes the audio; whatever else was talking, on
+        # this line or another, goes on hold.
+        self._take_audio(call)
         if self.router:
-            # A newly connected consult call takes the foreground; a primary
-            # call takes it unless a consult is already up.
-            if call.role == "consult":
-                self.router.set_foreground(call.call_id)
-            else:
-                self.router.add_foreground(call.call_id)
+            self.router.add_foreground(call.call_id)
+        self._sync_mute(call)
         if self.audio and not self._audio_started:
             try:
                 self.audio.start()
@@ -1096,7 +1262,7 @@ class SIPPhone:
         self._notify(call)
         # A consult call placed for conferencing bridges as soon as it answers.
         if getattr(call, "_conf_on_answer", False):
-            primary = self.primary_call()
+            primary = self.pair_of(call)[0]
             if primary:
                 try:
                     self._bridge(primary, call)
@@ -1110,10 +1276,17 @@ class SIPPhone:
             self._send_bye(call)
         call.state = CallState.ENDED
         call.end_reason = reason
+        call.hold_pending = False
         if call.rtp:
             call.rtp.stop()
         if self.router:
             self.router.drop(call.call_id)
+        self._leave_conference(call)
+        with self._lock:
+            # a consultation call whose first call is gone is an ordinary call from here on
+            for c in self.calls.values():
+                if c.state != CallState.ENDED and c.role == "consult" and c.parent == call.call_id:
+                    c.role, c.parent = "primary", None
         # Stop the audio device only when no calls remain live.
         live = [c for c in self.calls.values() if c.state != CallState.ENDED and c is not call]
         if self.audio and self._audio_started and not live:
@@ -1138,8 +1311,12 @@ class SIPPhone:
             if call_id:
                 call = self.calls.get(call_id)
             else:
-                live = [c for c in self.calls.values() if c.state != CallState.ENDED]
-                call = live[-1] if live else None
+                # no call named: the one with the audio if it fits, else the newest that does
+                live = sorted((c for c in self.calls.values() if c.state != CallState.ENDED),
+                              key=lambda c: c.created)
+                fits = [c for c in live if want is None or c.state == want]
+                focus = focus_of(live, self.router)
+                call = focus if (focus is not None and focus in fits) else (fits[-1] if fits else focus)
         if not call:
             raise RuntimeError("no active call")
         if want and call.state != want:
@@ -1148,9 +1325,7 @@ class SIPPhone:
 
     @property
     def active_call(self) -> Optional[Call]:
-        with self._lock:
-            live = [c for c in self.calls.values() if c.state != CallState.ENDED]
-        return live[-1] if live else None
+        return self.focus_call()
 
     # ------------------------------------------------------------------ dispatch
     def _on_message(self, msg: Message, addr) -> None:
