@@ -202,6 +202,16 @@ TROUBLESHOOTING
       Wrong SIP password or Authentication Name - use the Device page values,
       not your portal login. Fix them in Settings and click Save.
 
+  The settings folder isn't in AppData\Roaming\sipphone / "cannot find the path"
+      Python came from the Microsoft Store, and Windows keeps its files in a
+      private folder. Install.bat says so and shows the real folder:
+      %LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python...\LocalCache\
+      Roaming\sipphone. Nothing is wrong and the app finds its settings itself.
+      To get the usual folder, install Python from python.org and run
+      Install.bat again - it switches to that Python and carries your settings
+      over. Remove the Store Python (Windows Settings > Apps) only afterwards:
+      removing it deletes the private folder.
+
   One-way or no audio
       Allow Python in Windows Firewall; turn off SIP ALG on the router.
 

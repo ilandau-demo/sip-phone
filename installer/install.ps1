@@ -76,16 +76,8 @@ if (-not $whl) {
 Step "1. Looking for Python"
 # 1. Find Python 3.9+ (py launcher, python, or the usual install folders)
 $check = "import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)"
-function Find-Python {
-    $script:PY = $null; $script:PYA = @()
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        & py -3 -c $check 2>$null
-        if ($LASTEXITCODE -eq 0) { $script:PY = 'py.exe'; $script:PYA = @('-3'); return $true }
-    }
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        & python -c $check 2>$null
-        if ($LASTEXITCODE -eq 0) { $script:PY = 'python.exe'; return $true }
-    }
+function Find-RegularPython {
+    # A python.org-style install in one of the usual folders ('' when there is none)
     $cands = @()
     foreach ($root in @("$env:LOCALAPPDATA\Programs\Python", "$env:ProgramFiles", "${env:ProgramFiles(x86)}")) {
         if ($root -and (Test-Path $root)) {
@@ -96,9 +88,23 @@ function Find-Python {
     foreach ($c in $cands) {
         if (Test-Path $c) {
             & $c -c $check 2>$null
-            if ($LASTEXITCODE -eq 0) { $script:PY = $c; return $true }
+            if ($LASTEXITCODE -eq 0) { return $c }
         }
     }
+    return ''
+}
+function Find-Python {
+    $script:PY = $null; $script:PYA = @()
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        & py -3 -c $check 2>$null
+        if ($LASTEXITCODE -eq 0) { $script:PY = 'py.exe'; $script:PYA = @('-3'); return $true }
+    }
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        & python -c $check 2>$null
+        if ($LASTEXITCODE -eq 0) { $script:PY = 'python.exe'; return $true }
+    }
+    $c = Find-RegularPython
+    if ($c) { $script:PY = $c; return $true }
     return $false
 }
 if (-not (Find-Python)) {
@@ -121,6 +127,44 @@ if (-not (Find-Python)) {
 }
 function Invoke-Py { & $PY @PYA @args }
 Write-Host ("Using " + (Invoke-Py --version) + " ($PY)")
+
+# 1b. Python from the Microsoft Store works, but Windows gives it a private copy
+#     of AppData, so the settings are not in the folder people look in. Use a
+#     regular Python when there is one; otherwise say so and show the real folder.
+$StoreRoaming = ''
+function Test-StorePython {
+    $exe = [string](Invoke-Py -c "import sys; print(sys.executable)" 2>$null | Select-Object -First 1)
+    return ($exe -match 'WindowsApps|PythonSoftwareFoundation')
+}
+if (Test-StorePython) {
+    Write-Host ""
+    Write-Host "This Python came from the Microsoft Store." -ForegroundColor Yellow
+    $regular = Find-RegularPython
+    if ($regular -and (Ask "A regular Python is installed too ($regular). Use that one instead (recommended)?" (-not $Quiet))) {
+        $PY = $regular; $PYA = @()
+        Write-Host ("Using " + (Invoke-Py --version) + " ($PY)")
+    }
+}
+if (Test-StorePython) {
+    $pyMM = [string](Invoke-Py -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null | Select-Object -First 1)
+    $pkgRoot = Join-Path $env:LOCALAPPDATA 'Packages'
+    $pkg = Get-ChildItem $pkgRoot -Directory -Filter "PythonSoftwareFoundation.Python.${pyMM}_*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pkg) { $pkg = Get-ChildItem $pkgRoot -Directory -Filter 'PythonSoftwareFoundation.Python*' -ErrorAction SilentlyContinue | Select-Object -First 1 }
+    if ($pkg) { $StoreRoaming = Join-Path $pkg.FullName 'LocalCache\Roaming' }
+    else { $StoreRoaming = Join-Path $pkgRoot "PythonSoftwareFoundation.Python.${pyMM}_qbz5n2kfra8p0\LocalCache\Roaming" }
+    Write-Host "Telvoro works with it, but Windows keeps its settings in a private folder."
+    Write-Host ("They will NOT be in " + (Join-Path $env:APPDATA 'sipphone') + ". The real folder is:")
+    Write-Host ("  " + (Join-Path $StoreRoaming 'sipphone')) -ForegroundColor Cyan
+    Write-Host "You never need that folder for normal use: everything is set in Telvoro's Settings screen."
+    Write-Host "To have the settings in the usual place instead: answer N, install Python from"
+    Write-Host "https://www.python.org/downloads/ (tick 'Add python.exe to PATH') and run Install.bat"
+    Write-Host "again. It then uses that Python and carries existing settings over. Remove the"
+    Write-Host "Microsoft Store Python only after that - removing it deletes its private folder."
+    if (-not (Ask "Continue with the Microsoft Store Python?" $true)) {
+        Write-Host "Nothing was installed. Run Install.bat again after installing Python from python.org."
+        Pause-Exit 1
+    }
+}
 
 Step "2. Stopping a running copy"
 # 2. Make room: tell a running copy (and the browser bridge) to step aside.
@@ -166,7 +210,29 @@ if ($STT -or (Ask "Install speech-to-text (see what the caller says; ~250 MB)?" 
 Step "5. Settings, voice, Start-menu shortcut"
 # 5. Config, voice, Start-menu shortcut (+ presets for team roll-outs)
 Write-Host ""
+if (-not $StoreRoaming) {
+    # Moved from the Microsoft Store Python to a regular one: bring the settings
+    # along, once (never over settings that are already in the usual place).
+    $realCfg = Join-Path $env:APPDATA 'sipphone'
+    if (-not (Test-Path (Join-Path $realCfg 'config.ini'))) {
+        $old = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Packages') -Directory -Filter 'PythonSoftwareFoundation.Python*' -ErrorAction SilentlyContinue |
+               ForEach-Object { Join-Path $_.FullName 'LocalCache\Roaming\sipphone' } |
+               Where-Object { Test-Path (Join-Path $_ 'config.ini') } |
+               Sort-Object { (Get-Item (Join-Path $_ 'config.ini')).LastWriteTime } -Descending | Select-Object -First 1
+        if ($old) {
+            try {
+                New-Item -ItemType Directory -Force -Path $realCfg | Out-Null
+                Copy-Item -Path (Join-Path $old '*') -Destination $realCfg -Recurse -Force -ErrorAction Stop
+                Write-Host "Settings carried over from the Microsoft Store Python:"
+                Write-Host "  $old  ->  $realCfg"
+            } catch { Write-Host "Could not copy the old settings from $old ($_)" -ForegroundColor Yellow }
+        }
+    }
+}
 Invoke-Py -m sipphone --setup
+if ($StoreRoaming) {
+    Write-Host ("Real settings folder (Microsoft Store Python): " + (Join-Path $StoreRoaming 'sipphone')) -ForegroundColor Cyan
+}
 $sets = @()
 if ($Mode) { $sets += "--set"; $sets += "app.mode=$Mode" }
 if ($UpdateSource) { $sets += "--set"; $sets += "update.source=$UpdateSource" }
@@ -268,6 +334,9 @@ if (-not $Quiet) {
     Write-Host "Settings screen and fill in the details it asks for."
 }
 Write-Host "Next time, start it from 'Telvoro' in the Start menu (or the browser extension)."
+if ($StoreRoaming) {
+    Write-Host ("Settings folder, if you ever need the files: " + (Join-Path $StoreRoaming 'sipphone'))
+}
 Write-Host "Updates: Settings > Updates > 'Install from file', or run the new Install.bat."
 Write-Host "Browser extension later: Settings > Browser extension, or run   python -m sipphone --extension"
 Pause-Exit 0
